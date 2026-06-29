@@ -15,6 +15,7 @@ import {
 } from 'firebase/firestore';
 import { db } from "../../firebase/firebase";
 import AddAnnouncementModal from "./modals/AddAnnouncementModal";
+import DeleteAnnouncementModal from "./modals/DeleteAnnouncementModal";
 
 interface Announcement {
     id: string;
@@ -29,6 +30,7 @@ interface Announcement {
 interface Event {
     id: string;
     title: string;
+    location: string;
     date: Date;
     mandatory: boolean;
     userRsvp: boolean;
@@ -38,7 +40,9 @@ export default function Home() {
     const [announcements, setAnnouncements] = useState<Announcement[]>([]);
     const [upcomingEvents, setUpcomingEvents] = useState<Event[]>([]);
     const [isAdmin, setIsAdmin] = useState(false);
-    const [openModal, setOpenModal] = useState(false);
+    const [openAddModal, setOpenAddModal] = useState(false);
+    const [openDeleteModal, setOpenDeleteModal] = useState(false);
+    const [selectedAnnouncement, setSelectedAnnouncement] = useState<Announcement | null>(null);
     const [loading, setLoading] = useState(true);
     const [userId, setUserId] = useState('');
 
@@ -106,11 +110,13 @@ export default function Home() {
     }, []);
 
     useEffect(() => {
-        if(!userId) return;
+        if(!userId) {
+            return;
+        }
 
         try {
-            const now = Date.now();
-            const threeDaysLater =  now + 3 * 24 * 60 * 60 * 1000;
+            const now = new Date();
+            const threeDaysLater = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
 
             const q = query(
                 collection(db, 'events'),
@@ -118,6 +124,8 @@ export default function Home() {
                 where('date', '<=', threeDaysLater),
                 orderBy('date', 'asc')
             );
+
+            console.log('Event query: ', q);
 
             const unsubscribe = onSnapshot(q, async (snapshot) => {
                 const eventList: Event[] = [];
@@ -133,6 +141,7 @@ export default function Home() {
                         eventList.push({
                             id: eventDoc.id,
                             title: eventData.title,
+                            location: eventData.location,
                             date: eventData.date.toDate(),
                             mandatory: eventData.mandatory || false,
                             userRsvp: !rsvpSnapshot.empty,
@@ -148,7 +157,7 @@ export default function Home() {
         } catch (error) {
             console.error('Error fetching events:', error);
         }
-    }, []);
+    }, [userId]);
 
     const handleDeleteAnnouncement = async (id: string) => {
         try {
@@ -174,8 +183,8 @@ export default function Home() {
                     {isAdmin && (
                         <IconButton 
                             aria-label='add' 
-                            onClick={() => setOpenModal(true)} 
-                            sx={{ backgroundColor: '#1a68fa !important', color: 'white', '&:hover': { backgroundColor: '#1554c9 !important' } }}
+                            onClick={() => setOpenAddModal(true)} 
+                            color='secondary'
                         >
                             <Add />
                         </IconButton>
@@ -193,7 +202,7 @@ export default function Home() {
                         <Typography color='textSecondary' sx={{ textAlign: 'center', mt: 3 }}>No Announcements</Typography>
                     ) : (
                         announcements.map((announcement) => (
-                            <Card key={announcement.id} sx={{ display: 'flex', flexDirection: 'row', justifyContent: 'space-between'}}>
+                            <Card key={announcement.id} sx={{ display: 'flex', flexDirection: 'row', justifyContent: 'space-between', flexShrink: 0 }}>
                                 <CardContent>
                                     <Box sx={{
                                         display: 'flex',
@@ -211,8 +220,11 @@ export default function Home() {
                                     <CardActions>
                                         <IconButton 
                                             aria-label='delete'
-                                            onClick={() => handleDeleteAnnouncement(announcement.id)}
-                                            sx={{ backgroundColor: '#fa1a1a !important', color: 'white', '&:hover': { backgroundColor: '#c91515 !important' } }}
+                                            onClick={() => {
+                                                setSelectedAnnouncement(announcement);
+                                                setOpenDeleteModal(true); 
+                                            }}
+                                            color='error'
                                         >
                                             <Delete />
                                         </IconButton> 
@@ -242,7 +254,7 @@ export default function Home() {
                         <Typography color='textSecondary' sx={{ textAlign: 'center', mt: 3 }}>No upcoming events</Typography>
                     ) : (
                         upcomingEvents.map((event) => (
-                            <Card key={event.id}>
+                            <Card key={event.id} sx={{ flexShrink: 0 }}>
                                 <CardContent>
                                     <Box sx={{
                                         display: 'flex',
@@ -250,9 +262,10 @@ export default function Home() {
                                         alignItems: 'start',
                                         gap: 1
                                     }}>
-                                        <Box sx={{ flex: 1 }}>
+                                        <Box sx={{ flex: 1, display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 2 }}>
                                             <Typography variant='subtitle1' sx={{ fontWeight: 'bold' }}>{event.title}</Typography>
-                                            <Typography variant='body2' color='textSecondary' sx={{ mt: 1 }}>
+                                            <Typography variant='body2' color='textSecondary'>@ {event.location}</Typography>
+                                            <Typography variant='body2' color='textSecondary'>
                                                 {event.date.toLocaleDateString()} {event.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit'})}
                                             </Typography>
                                         </Box>
@@ -272,7 +285,15 @@ export default function Home() {
                 </Box>
             </Paper>
 
-            <AddAnnouncementModal open={openModal} onClose={() => setOpenModal(false)} />
+            <AddAnnouncementModal open={openAddModal} onClose={() => setOpenAddModal(false)} />
+            <DeleteAnnouncementModal 
+                open={openDeleteModal} 
+                onClose={() => setOpenDeleteModal(false)} 
+                id={selectedAnnouncement?.id || ''} 
+                onConfirm={handleDeleteAnnouncement}
+                title={selectedAnnouncement?.title || ''}
+                expirationDate={selectedAnnouncement?.expirationDate || null}
+            />
         </Box>
     )
 }
@@ -282,5 +303,4 @@ export const page = {
     flexDirection: 'column',
     overflow: 'hidden',
     p: 2,
-    backgroundColor: '#161b31'
 }

@@ -109,6 +109,25 @@ export const inputsCustomizations: Components<Theme> = {
           },
           {
             props: {
+              color: 'error',
+              variant: 'contained',
+            },
+            style: {
+              color: 'white',
+              backgroundColor: '#d32f2f',
+              backgroundImage: 'linear-gradient(to bottom, #f44336, #d32f2f',
+              border: '1px solid #d32f2f',
+              '&:hover': {
+                backgroundColor: '#c62828',
+                backgroundImage: 'none',
+              },
+              '&:active': {
+                backgroundColor: '#b71c1c',
+              }
+            }
+          },
+          {
+            props: {
               variant: 'outlined',
             },
             style: {
@@ -269,6 +288,77 @@ export const inputsCustomizations: Components<Theme> = {
             style: {
               width: '2.5rem',
               height: '2.5rem',
+            },
+          },
+          {
+            props: {
+              color: 'error',
+            },
+            style: {
+              color: '#d32f2f',
+              borderColor: '#f48fb1',
+              backgroundColor: 'rgba(244, 67, 54, 0.04)',
+              '&:hover': {
+                backgroundColor: 'rgba(244, 67, 54, 0.08)',
+                borderColor: '#f44336'
+              },
+              '&:active': {
+                backgroundColor: 'rgba(244, 67, 54, 0.12)'
+              },
+              ...theme.applyStyles('dark', {
+                color: '#ff6b6b',
+                borderColor: '#8b0000',
+                backgroundColor: 'rgba(244, 67, 54, 0.12)',
+                '&:hover': {
+                  backgroundColor: 'rgba(244, 67, 54, 0.2)',
+                  borderColor: '#ff6b6b',
+                }
+              })
+            }
+          },
+          {
+            props: {
+              color: 'success',
+            },
+            style: {
+              color: '#2e7d32',
+              borderColor: '#81c784',
+              backgroundColor: 'rgba(76, 175, 80, 0.04)',
+              '&:hover': {
+                backgroundColor: 'rgba(76, 175, 80, 0.08)',
+                borderColor: '#4caf50',
+              },
+            }
+          },
+          {
+            props: {
+              color: 'secondary',
+            },
+            style: {
+              color: brand[700],
+              border: '1px solid',
+              borderColor: brand[200],
+              backgroundColor: brand[50],
+              '&:hover': {
+                backgroundColor: brand[100],
+                borderColor: brand[400],
+              },
+              '&:active': {
+                backgroundColor: alpha(brand[200], 0.7),
+              },
+              ...theme.applyStyles('dark', {
+                color: brand[50],
+                border: '1px solid',
+                borderColor: brand[900],
+                backgroundColor: alpha(brand[900], 0.3),
+                '&:hover': {
+                  borderColor: brand[700],
+                  backgroundColor: alpha(brand[900], 0.6),
+                },
+                '&:active': {
+                  backgroundColor: alpha(brand[900], 0.5),
+                },
+              }),
             },
           },
         ],

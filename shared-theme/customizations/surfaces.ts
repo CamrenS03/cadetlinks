@@ -54,6 +54,15 @@ export const surfacesCustomizations: Components<Theme> = {
     defaultProps: {
       elevation: 0,
     },
+    styleOverrides: {
+      root: ({ theme }) => {
+        return {
+          ...theme.applyStyles('dark', {
+            backgroundColor: 'gray[800]'
+          }),
+        }
+      }
+    },
   },
   MuiCard: {
     styleOverrides: {

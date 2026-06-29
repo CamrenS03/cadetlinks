@@ -66,7 +66,7 @@ export default function AddAnnouncementModal({open, onClose}: AddAnnouncementMod
             <DialogContent>
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
                     <TextField label='Title' value={title} onChange={(e) => setTitle(e.target.value)} fullWidth />
-                    <TextField label='Details' value={details} onChange={(e) => setDetails(e.target.value)} fullWidth multiline rows={4} />
+                    <TextField label='Details' value={details} onChange={(e) => setDetails(e.target.value)} fullWidth multiline />
                     <FormControl>
                         <FormLabel>Importance</FormLabel>
                         <Select value={importance} onChange={(e) => setImportance(e.target.value)} fullWidth>
@@ -86,7 +86,12 @@ export default function AddAnnouncementModal({open, onClose}: AddAnnouncementMod
                 </Box>
             </DialogContent>
             <DialogActions>
-                <Button onClick={handleSubmit} variant='contained' disabled={loading}>
+                <Button 
+                    onClick={handleSubmit} 
+                    variant='contained' 
+                    color='secondary' 
+                    disabled={loading}
+                >
                     {loading ? 'Adding...' : 'Add'}
                 </Button>
                 <Button onClick={onClose}>Cancel</Button>
