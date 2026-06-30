@@ -1,43 +1,14 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import {
-  Box,
-  Button,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  TextField,
-  FormControlLabel,
-  Checkbox,
-  CircularProgress,
-  Alert,
-  Chip,
-  IconButton,
-  Menu,
-  MenuItem,
-  Modal,
-  Typography,
-  Paper,
-  Divider,
-} from '@mui/material';
+import React, { useState, useEffect } from 'react';
+import { Box, CircularProgress, Alert, Typography, Paper } from '@mui/material';
 import { EventCalendar } from '@mui/x-scheduler';
-import MoreVertIcon from '@mui/icons-material/MoreVert';
-import EditIcon from '@mui/icons-material/Edit';
-import DeleteIcon from '@mui/icons-material/Delete';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import { useUser } from './hooks/useUser';
-import { useUserCache } from './hooks/useUserCache';
 import { db } from '../../firebase/firebase';
 import { useAuth } from '../../firebase/AuthContext';
 import {
   collection,
-  addDoc,
+  setDoc,
   updateDoc,
   deleteDoc,
   doc,
-  getDocs,
-  query,
-  where,
   onSnapshot,
   serverTimestamp,
   Timestamp,
@@ -49,133 +20,51 @@ interface CalendarEvent {
   description?: string;
   start: Date;
   end: Date;
-  location?: string;
   mandatory?: boolean;
   createdBy: string;
-  createdByName?: string;
+  lastEditedBy?: string;
 }
 
-interface RSVP {
-  id?: string;
-  userId: string;
-  userName: string;
-  timestamp: Date;
-}
-
-const defaultFormData = () => ({
-  title: '',
-  description: '',
-  location: '',
-  mandatory: false,
-  start: new Date(),
-  end: new Date(Date.now() + 3600000),
-});
-
-const toLocalDatetimeValue = (date: Date) =>
-  new Date(date.getTime() - date.getTimezoneOffset() * 60000)
-    .toISOString()
-    .slice(0, 16);
+const MANDATORY_TITLES = new Set(['pt', 'llab', 'dining out', 'dining in']);
+const isMandatory = (title: string) => MANDATORY_TITLES.has(title.trim().toLowerCase());
 
 const Events: React.FC = () => {
   const { currentUser } = useAuth();
-  const { userJob } = useUser();
-  const { getMultipleUsers } = useUserCache();
 
   const [events, setEvents] = useState<CalendarEvent[]>([]);
-  const [rsvpMap, setRsvpMap] = useState<Map<string, RSVP[]>>(new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
-  const [openEventForm, setOpenEventForm] = useState(false);
-  const [openEventDetails, setOpenEventDetails] = useState(false);
-  const [openDeleteConfirm, setOpenDeleteConfirm] = useState(false);
-  const [openRSVPList, setOpenRSVPList] = useState(false);
-  const [formData, setFormData] = useState(defaultFormData());
-  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-  const [userRsvpStatus, setUserRsvpStatus] = useState<Map<string, boolean>>(new Map());
 
-  const canManageEvents = userJob?.permissions?.includes('manage_events') ?? false;
-  const canManageAllEvents = userJob?.permissions?.includes('manage_all_events')?? false;
-  const canEditSelected = useMemo(
-    () => !!selectedEvent && (selectedEvent.createdBy === currentUser?.uid || canManageAllEvents),
-    [selectedEvent, currentUser, canManageAllEvents]
-  );
-
-  // Fetch events and RSVPs
   useEffect(() => {
     if (!currentUser) return;
 
-    const unsubscribe = onSnapshot(collection(db, 'events'), async (snapshot) => {
+    const unsubscribe = onSnapshot(collection(db, 'events'), (snapshot) => {
       try {
-        const eventsData: CalendarEvent[] = [];
-        const creatorIds = new Set<string>();
-
-        // First pass: collect all creator IDs and basic event data
-        for (const docSnap of snapshot.docs) {
+        const eventsData: CalendarEvent[] = snapshot.docs.map((docSnap) => {
           const data = docSnap.data();
-          creatorIds.add(data.createdBy);
-
-          const start = data.startDate instanceof Timestamp
-            ? data.startDate.toDate()
-            : new Date(data.startDate);
-          const end = data.endDate instanceof Timestamp
-            ? data.endDate.toDate()
-            : new Date(start.getTime() + 3600000);
-          eventsData.push({
+          const startRaw = data.startDate ?? data.date;
+          const start =
+            startRaw instanceof Timestamp
+              ? startRaw.toDate()
+              : startRaw
+              ? new Date(startRaw)
+              : new Date();
+          const end =
+            data.endDate instanceof Timestamp
+              ? data.endDate.toDate()
+              : new Date(start.getTime() + 3600000);
+          return {
             id: docSnap.id,
             title: data.title,
             description: data.description,
             start,
             end,
-            location: data.location,
             mandatory: data.mandatory,
             createdBy: data.createdBy,
-          });
-        }
-
-        // Batch fetch all creator names
-        const userMap = await getMultipleUsers(Array.from(creatorIds));
-        eventsData.forEach((event) => {
-          event.createdByName = userMap.get(event.createdBy)?.displayName || event.createdBy;
+            lastEditedBy: data.lastEditedBy,
+          };
         });
-
         setEvents(eventsData);
-
-        // Fetch RSVPs for all events
-        const allRsvpUserIds = new Set<string>();
-        const rsvpDocsMap = new Map<string, { id: string, userId: string; timestamp: any }[]>();
-
-        // First pass: collect all user IDs from RSVPs
-        for (const event of eventsData) {
-          const rsvpsSnap = await getDocs(collection(db, 'events', event.id, 'rsvps'));
-          const docs = rsvpsSnap.docs.map((d) => ({ id: d.id, ...d.data() as { userId: string; timestamp: any } }));
-          rsvpDocsMap.set(event.id, docs);
-          docs.forEach((d) => allRsvpUserIds.add(d.userId));
-        }
-
-        // Batch fetch all RSVP user names
-        const userNamesMap = await getMultipleUsers(Array.from(allRsvpUserIds));
-        const rsvpMapTemp = new Map<string, RSVP[]>();
-        const userRsvpStatusTemp = new Map<string, boolean>();
-
-        // Second pass: populate RSVP with user names
-        for (const event of eventsData) {
-          const docs = rsvpDocsMap.get(event.id) || [];
-          const rsvps: RSVP[] = docs.map((d) => ({
-            id: d.id,
-            userId: d.userId,
-            userName: userNamesMap.get(d.userId)?.displayName || d.userId,
-            timestamp: d.timestamp instanceof Timestamp ? d.timestamp.toDate() : new Date(d.timestamp),
-          }));
-          
-          rsvpMapTemp.set(event.id, rsvps);
-          if (docs.some((d) => d.userId === currentUser.uid)) {
-            userRsvpStatusTemp.set(event.id, true);
-          }
-        }
-
-        setRsvpMap(rsvpMapTemp);
-        setUserRsvpStatus(userRsvpStatusTemp);
         setLoading(false);
       } catch (err) {
         console.error('Error fetching events:', err);
@@ -185,154 +74,76 @@ const Events: React.FC = () => {
     });
 
     return unsubscribe;
-  }, [currentUser, getMultipleUsers]);
+  }, [currentUser]);
 
-  const handleCreateEvent = async () => {
-    if (!currentUser || !formData.title) {
-      setError('Please fill in all required fields');
-      return;
-    }
-
-    try {
-      await addDoc(collection(db, 'events'), {
-        title: formData.title,
-        description: formData.description || '',
-        startDate: Timestamp.fromDate(formData.start),
-        endDate: Timestamp.fromDate(formData.end),
-        location: formData.location || '',
-        mandatory: formData.mandatory,
-        createdBy: currentUser.uid,
-        createdAt: serverTimestamp(),
-      });
-
-      setOpenEventForm(false);
-      setFormData(defaultFormData());
-      setError(null);
-    } catch (err) {
-      console.error('Error creating event:', err);
-      setError('Failed to create event');
-    }
-  };
-
-  const handleUpdateEvent = async () => {
-    if (!selectedEvent || !formData.title) {
-      setError('Please fill in all required fields');
-      return;
-    }
-
-    try {
-      await updateDoc(doc(db, 'events', selectedEvent.id), {
-        title: formData.title,
-        description: formData.description || '',
-        startDate: Timestamp.fromDate(formData.start),
-        endDate: Timestamp.fromDate(formData.end),
-        location: formData.location || '',
-        mandatory: formData.mandatory,
-      });
-
-      setOpenEventForm(false);
-      setSelectedEvent(null);
-      setFormData(defaultFormData());
-      setError(null);
-    } catch (err) {
-      console.error('Error updating event:', err);
-      setError('Failed to update event');
-    }
-  };
-
-  const handleDeleteEvent = async () => {
-    if (!selectedEvent) return;
-
-    try {
-      await deleteDoc(doc(db, 'events', selectedEvent.id));
-      setOpenDeleteConfirm(false);
-      setOpenEventDetails(false);
-      setSelectedEvent(null);
-      setError(null);
-    } catch (err) {
-      console.error('Error deleting event:', err);
-      setError('Failed to delete event');
-    }
-  };
-
-  const handleRSVPToggle = async (event: CalendarEvent) => {
+  // Fired by MUI X Scheduler when events are created, dragged, resized, edited, or deleted
+  const handleEventsChange = async (updatedEvents: any[]) => {
     if (!currentUser) return;
 
-    const isRsvped = userRsvpStatus.get(event.id);
-    try {
-      if (isRsvped) {
-        const rsvpsSnap = await getDocs(
-          query(collection(db, 'events', event.id, 'rsvps'), where('userId', '==', currentUser.uid))
-        );
-        for (const rsvpDoc of rsvpsSnap.docs) {
-          await deleteDoc(rsvpDoc.ref);
+    const updatedMap = new Map(updatedEvents.map((e) => [e.id, e]));
+    const currentMap = new Map(events.map((e) => [e.id, e]));
+
+    // Deletions
+    for (const [id] of currentMap) {
+      if (!updatedMap.has(id)) {
+        try {
+          await deleteDoc(doc(db, 'events', id));
+        } catch (err) {
+          console.error('Error deleting event:', err);
+          setError('Failed to delete event');
         }
-        //Remove from local rsvpMap
-        setRsvpMap((prev) => {
-          const next = new Map(prev);
-          next.set(event.id, (next.get(event.id) || []).filter((r) => r.userId !== currentUser.uid));
-          return next;
-        });
-      } else {
-        await addDoc(collection(db, 'events', event.id, 'rsvps'), {
-          userId: currentUser.uid,
-          timestamp: serverTimestamp(),
-        });
-        // Add to local rsvpMap
-        setRsvpMap((prev) => {
-          const next = new Map(prev);
-          const existing = next.get(event.id) || [];
-          next.set(event.id, [
-            ...existing,
-            { userId: currentUser.uid, userName: currentUser.displayName || currentUser.email || 'You', timestamp: new Date() },
-          ]);
-          return next;
-        });
       }
-
-      setUserRsvpStatus((prev) => new Map(prev).set(event.id, !isRsvped));
-    } catch (err) {
-      console.error('Error toggling RSVP:', err);
-      setError('Failed to update RSVP');
     }
-  };
 
-  const handleOpenEdit = useCallback((event: CalendarEvent) => {
-    setSelectedEvent(event);
-    setFormData({
-      title: event.title,
-      description: event.description || '',
-      start: event.start,
-      end: event.end,
-      location: event.location || '',
-      mandatory: event.mandatory || false,
-    });
-    setOpenEventForm(true);
-    setAnchorEl(null);
-  }, []);
-
-  const handleOpenDetails = useCallback((event: CalendarEvent) => {
-    setSelectedEvent(event);
-    setOpenEventDetails(true);
-    setAnchorEl(null);
-  }, []);
-
-  const handleMenuClick = (e: React.MouseEvent<HTMLElement>, event: CalendarEvent) => {
-    setSelectedEvent(event);
-    setAnchorEl(e.currentTarget);
+    for (const [id, updated] of updatedMap) {
+      const current = currentMap.get(id);
+      const newStart = new Date(updated.start);
+      const newEnd = new Date(updated.end);
+      if (!current) {
+        // New event created
+        try {
+          await setDoc(doc(db, 'events', id), {
+            title: updated.title ?? 'New Event',
+            description: updated.description ?? '',
+            startDate: Timestamp.fromDate(newStart),
+            endDate: Timestamp.fromDate(newEnd),
+            mandatory: isMandatory(updated.title ?? ''),
+            createdBy: currentUser.uid,
+            createdAt: serverTimestamp(),
+          });
+        } catch (err) {
+          console.error('Error creating event:', err);
+          setError('Failed to creating event');
+        }
+      } else {
+        // Existing event updated
+        const changed =
+          updated.title !== current.title ||
+          updated.description !== current.description ||
+          newStart.getTime() !== current.start.getTime() ||
+          newEnd.getTime() !== current.end.getTime();
+        if (changed) {
+          try {
+            await updateDoc(doc(db, 'events', id), {
+              title: updated.title,
+              description: updated.description ?? '',
+              startDate: Timestamp.fromDate(newStart),
+              endDate: Timestamp.fromDate(newEnd),
+              mandatory: isMandatory(updated.title),
+              lastEditedBy: currentUser.uid,
+            });
+          } catch (err) {
+            console.error('Error updating event:', err);
+            setError('Failed to update event');
+          }
+        }
+      }
+    }
   };
 
   if (loading) {
     return (
-      <Box
-        sx={{
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          height: '100%',
-          minHeight: '400px',
-        }}
-      >
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', minHeight: '400px' }}>
         <CircularProgress />
       </Box>
     );
@@ -340,305 +151,22 @@ const Events: React.FC = () => {
 
   return (
     <Box sx={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', p: 2 }}>
-      {/* Header */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-        <Typography variant="h5" sx={{ fontWeight: 600 }}>
-          Events Calendar
-        </Typography>
-        {canManageEvents && (
-          <Button
-            variant="contained"
-            color="primary"
-            onClick={() => {
-              setSelectedEvent(null);
-              setFormData(defaultFormData());
-              setOpenEventForm(true);
-            }}
-          >
-            Create Event
-          </Button>
-        )}
-      </Box>
-
       {error && (
         <Alert severity="error" onClose={() => setError(null)} sx={{ mb: 2 }}>
           {error}
         </Alert>
       )}
 
-      {/* Event Calendar */}
-      <Paper sx={{ flex: '0 0 auto', height: '420px', overflow: 'auto', mb: 2 }}>
+      <Paper sx={{ flex: 1, overflow: 'hidden' }}>
         <EventCalendar
           events={events.map((e) => ({ ...e, start: e.start.toISOString(), end: e.end.toISOString() }))}
-          readOnly
-          areEventsDraggable={false}
-          areEventsResizable={false}
+          onEventsChange={handleEventsChange}
+          areEventsDraggable
+          areEventsResizable
+          eventCreation={{ interaction: 'double-click' }}
           sx={{ height: '100%' }}
         />
       </Paper>
-
-      {/* Clickable event list */}
-      <Paper sx={{ flex: 1, overflow: 'auto', mb: 2 }}>
-        {events.length === 0 ? (
-          <Typography color="textSecondary" sx={{ p: 2, textAlign: 'center' }}>
-            No events scheduled
-          </Typography>
-        ) : (
-          [...events]
-            .sort((a, b) => a.start.getTime() - b.start.getTime())
-            .map((event) => (
-              <Box
-                key={event.id}
-                onClick={() => handleOpenDetails(event)}
-                sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  px: 2,
-                  py: 1.5,
-                  cursor: 'pointer',
-                  borderBottom: '1px solid',
-                  borderColor: 'divider',
-                  '&:hover': { bgcolor: 'action.hover' },
-                  '&:last-child': { borderBottom: 'none' },
-                }}
-              >
-                <Box>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Typography variant="body1" sx={{ fontWeight: 500 }}>
-                      {event.title}
-                    </Typography>
-                    {event.mandatory && (
-                      <Chip label="Mandatory" color="error" size="small" />
-                    )}
-                  </Box>
-                  <Typography variant="body2" color="textSecondary">
-                    {event.start.toLocaleString()} — {event.end.toLocaleString()}
-                  </Typography>
-                  {event.location && (
-                    <Typography variant="body2" color="textSecondary">
-                      {event.location}
-                    </Typography>
-                  )}
-                </Box>
-                <Typography variant="body2" color="textSecondary">
-                  {rsvpMap.get(event.id)?.length ?? 0} RSVP{(rsvpMap.get(event.id)?.length ?? 0) !== 1 ? 's' : ''}
-                </Typography>
-              </Box>
-            ))
-        )}
-      </Paper>
-
-      {/* Create/Edit Event Form */}
-      <Dialog open={openEventForm} onClose={() => setOpenEventForm(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>{selectedEvent ? 'Edit Event' : 'Create New Event'}</DialogTitle>
-        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
-          <TextField
-            label="Event Title"
-            fullWidth
-            value={formData.title}
-            onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-            required
-          />
-          <TextField
-            label="Description"
-            fullWidth
-            multiline
-            rows={3}
-            value={formData.description}
-            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-          />
-          <TextField
-            label="Start Date & Time"
-            type="datetime-local"
-            fullWidth
-            value={toLocalDatetimeValue(formData.start)}
-            onChange={(e) => setFormData({ ...formData, start: new Date(e.target.value) })}
-            slotProps={{ inputLabel: { shrink: true } }}
-            required
-          />
-          <TextField
-            label="End Date & Time"
-            type="datetime-local"
-            fullWidth
-            value={toLocalDatetimeValue(formData.end)}
-            onChange={(e) => setFormData({ ...formData, end: new Date(e.target.value) })}
-            slotProps={{ inputLabel: { shrink: true } }}
-            required
-          />
-          <TextField
-            label="Location"
-            fullWidth
-            value={formData.location}
-            onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-          />
-          <FormControlLabel
-            control={
-              <Checkbox
-                checked={formData.mandatory}
-                onChange={(e) => setFormData({ ...formData, mandatory: e.target.checked })}
-              />
-            }
-            label="Mandatory Event"
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setOpenEventForm(false)}>Cancel</Button>
-          <Button
-            onClick={selectedEvent ? handleUpdateEvent : handleCreateEvent}
-            variant="contained"
-            color="primary"
-          >
-            {selectedEvent ? 'Update' : 'Create'}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Event Details Modal */}
-      <Modal open={openEventDetails} onClose={() => setOpenEventDetails(false)}>
-        <Paper
-          sx={{
-            position: 'absolute',
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
-            width: { xs: '90%', sm: '500px' },
-            maxHeight: '90vh',
-            overflow: 'auto',
-            p: 3,
-          }}
-        >
-          {selectedEvent && (
-            <>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', mb: 2 }}>
-                <Box>
-                  <Typography variant="h5" sx={{ fontWeight: 600 }}>
-                    {selectedEvent.title}
-                  </Typography>
-                  {selectedEvent.mandatory && (
-                    <Chip label="Mandatory" color="error" size="small" sx={{ mt: 1 }} />
-                  )}
-                </Box>
-                {canEditSelected && (
-                  <IconButton onClick={(e) => handleMenuClick(e, selectedEvent)} size='small'>
-                    <MoreVertIcon />
-                  </IconButton>
-                )}
-              </Box>
-
-              <Divider sx={{ my: 2 }} />
-
-              <Box sx={{ mb: 2 }}>
-                <Typography variant="subtitle2" color="textSecondary">Start</Typography>
-                <Typography>{selectedEvent.start.toLocaleString()}</Typography>
-              </Box>
-
-              <Box sx={{ mb: 2 }}>
-                <Typography variant="subtitle2" color="textSecondary">End</Typography>
-                <Typography>{selectedEvent.end.toLocaleString()}</Typography>
-              </Box>
-
-              <Box sx={{ mb: 2 }}>
-                <Typography variant="subtitle2" color="textSecondary">Location</Typography>
-                <Typography>{selectedEvent.location || 'TBA'}</Typography>
-              </Box>
-
-              <Box sx={{ mb: 2 }}>
-                <Typography variant="subtitle2" color="textSecondary">Description</Typography>
-                <Typography>{selectedEvent.description || 'No description provided'}</Typography>
-              </Box>
-
-              <Box sx={{ mb: 2 }}>
-                <Typography variant="subtitle2" color="textSecondary">Created By</Typography>
-                <Typography>{selectedEvent.createdByName || selectedEvent.createdBy}</Typography>
-              </Box>
-
-              <Divider sx={{ my: 2 }} />
-
-              {/* RSVP Section */}
-              {!selectedEvent.mandatory && (
-                <Box sx={{ mb: 2 }}>
-                  <Button
-                    fullWidth
-                    variant={userRsvpStatus.get(selectedEvent.id) ? 'contained' : 'outlined'}
-                    color="primary"
-                    startIcon={userRsvpStatus.get(selectedEvent.id) ? <CheckCircleIcon /> : undefined}
-                    onClick={() => handleRSVPToggle(selectedEvent)}
-                  >
-                    {userRsvpStatus.get(selectedEvent.id) ? "RSVP'd" : 'RSVP'}
-                  </Button>
-                </Box>
-              )}
-
-              {/* RSVP List */}
-              <Box sx={{ mb: 2 }}>
-                <Button
-                  fullWidth
-                  variant="outlined"
-                  onClick={() => setOpenRSVPList(true)}
-                  sx={{ mb: 2 }}
-                >
-                  View RSVPs ({rsvpMap.get(selectedEvent.id)?.length || 0})
-                </Button>
-              </Box>
-
-              <Button
-                fullWidth
-                variant="outlined"
-                onClick={() => setOpenEventDetails(false)}
-              >
-                Close
-              </Button>
-            </>
-          )}
-        </Paper>
-      </Modal>
-
-      {/* RSVP List */}
-      <Dialog open={openRSVPList} onClose={() => setOpenRSVPList(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>RSVPs - {selectedEvent?.title}</DialogTitle>
-        <DialogContent>
-          {(rsvpMap.get(selectedEvent?.id ?? '')?.length ?? 0) > 0 ? (
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mt: 2 }}>
-              {rsvpMap.get(selectedEvent?.id ?? '')?.map((rsvp) => (
-                <Chip
-                  key={rsvp.id ?? rsvp.userId}
-                  label={rsvp.userName}
-                  variant="outlined"
-                  sx={{ justifyContent: 'flex-start' }}
-                />
-              ))}
-            </Box>
-          ) : (
-            <Typography color="textSecondary" sx={{ mt: 2 }}>No one has RSVP'd yet</Typography>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setOpenRSVPList(false)}>Close</Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Event Menu */}
-      <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={() => setAnchorEl(null)}>
-        <MenuItem onClick={() => selectedEvent && handleOpenEdit(selectedEvent)}>
-          <EditIcon sx={{ mr: 1 }} /> Edit
-        </MenuItem>
-        <MenuItem onClick={() => { setOpenDeleteConfirm(true); setAnchorEl(null); }}>
-          <DeleteIcon sx={{ mr: 1 }} /> Delete
-        </MenuItem>
-      </Menu>
-
-      {/* Delete Confirmation */}
-      <Dialog open={openDeleteConfirm} onClose={() => setOpenDeleteConfirm(false)}>
-        <DialogTitle>Delete Event</DialogTitle>
-        <DialogContent>
-          Are you sure you want to delete "{selectedEvent?.title}"? This cannot be undone.
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setOpenDeleteConfirm(false)}>Cancel</Button>
-          <Button onClick={handleDeleteEvent} color="error" variant="contained">Delete</Button>
-        </DialogActions>
-      </Dialog>
     </Box>
   );
 };

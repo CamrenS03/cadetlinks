@@ -119,12 +119,10 @@ export default function Home() {
 
             const q = query(
                 collection(db, 'events'),
-                where('date', '>=', now),
-                where('date', '<=', threeDaysLater),
-                orderBy('date', 'asc')
+                where('startDate', '>=', now),
+                where('startDate', '<=', threeDaysLater),
+                orderBy('startDate', 'asc')
             );
-
-            console.log('Event query: ', q);
 
             const unsubscribe = onSnapshot(q, async (snapshot) => {
                 const eventList: Event[] = [];
@@ -141,7 +139,7 @@ export default function Home() {
                             id: eventDoc.id,
                             title: eventData.title,
                             location: eventData.location,
-                            date: eventData.date.toDate(),
+                            date: eventData.startDate.toDate(),
                             mandatory: eventData.mandatory || false,
                             userRsvp: !rsvpSnapshot.empty,
                         });
