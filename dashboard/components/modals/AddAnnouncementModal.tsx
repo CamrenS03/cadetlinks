@@ -14,6 +14,7 @@ import {
 } from '@mui/material';
 import { collection, addDoc, Timestamp } from 'firebase/firestore'
 import { db } from '../../../firebase/firebase';
+import { useAuth } from '../../../firebase/AuthContext';
 
 interface AddAnnouncementModalProps {
     open: boolean;
@@ -21,30 +22,28 @@ interface AddAnnouncementModalProps {
 }
 
 export default function AddAnnouncementModal({open, onClose}: AddAnnouncementModalProps) {
+    const { currentUser } = useAuth();
     const [title, setTitle] = useState('');
     const [details, setDetails] = useState('');
     const [importance, setImportance] = useState<'high' | 'medium' | 'low'>('low');
     const [expirationDate, setExpirationDate] = useState('');
     const [loading, setLoading] = useState(false);
-    
+
     const handleSubmit = async () => {
         if (!title || !details || !expirationDate) {
             alert('Please fill in all fields');
             return;
         }
-    
+
         setLoading(true);
         try{
-            const userStr = localStorage.getItem('user');
-            const user = userStr ? JSON.parse(userStr) : null;
-
             await addDoc(collection(db, 'announcements'), {
                 title,
                 details,
                 importance,
                 expirationDate: Timestamp.fromDate(new Date(expirationDate)),
                 createdAt: Timestamp.now(),
-                createdBy: user?.uid || 'unknown'
+                createdBy: currentUser?.uid || 'unknown'
             });
 
             setTitle('');

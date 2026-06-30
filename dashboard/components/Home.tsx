@@ -14,6 +14,7 @@ import {
   getDocs,
 } from 'firebase/firestore';
 import { db } from "../../firebase/firebase";
+import { useAuth } from "../../firebase/AuthContext";
 import AddAnnouncementModal from "./modals/AddAnnouncementModal";
 import DeleteAnnouncementModal from "./modals/DeleteAnnouncementModal";
 
@@ -37,6 +38,7 @@ interface Event {
 }
 
 export default function Home() {
+    const { currentUser } = useAuth();
     const [announcements, setAnnouncements] = useState<Announcement[]>([]);
     const [upcomingEvents, setUpcomingEvents] = useState<Event[]>([]);
     const [isAdmin, setIsAdmin] = useState(false);
@@ -44,16 +46,13 @@ export default function Home() {
     const [openDeleteModal, setOpenDeleteModal] = useState(false);
     const [selectedAnnouncement, setSelectedAnnouncement] = useState<Announcement | null>(null);
     const [loading, setLoading] = useState(true);
-    const [userId, setUserId] = useState('');
+    const userId = currentUser?.uid ?? '';
 
     useEffect(() => { 
-        const userStr = localStorage.getItem('user');
-        if(userStr) {
-            const user = JSON.parse(userStr);
-            setUserId(user.uid);
-            fetchUserRole(user.uid);
+        if(currentUser?.uid) {
+            fetchUserRole(currentUser.uid);
         }
-    }, []);
+    }, [currentUser]);
 
     const fetchUserRole = async (uid: string) => {
         try {

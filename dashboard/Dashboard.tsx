@@ -42,8 +42,6 @@ export default function Dashboard(props: { disableCustomTheme?: boolean }) {
     const handleLogout = async () => {
         try {
             await signOut(auth);
-            localStorage.removeItem('authToken');
-            localStorage.removeItem('user');
             navigate('/');
         } catch (error) {
             console.error('Error logging out:', error);

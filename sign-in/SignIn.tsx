@@ -48,6 +48,8 @@ const Card = styled(MuiCard)(({ theme }) => ({
 }));
 
 export default function SignIn(props: { disableCustomTheme?: boolean }) {
+  const [email, setEmail] = React.useState('');
+  const [password, setPassword] = React.useState('');
   const [emailError, setEmailError] = React.useState(false);
   const [emailErrorMessage, setEmailErrorMessage] = React.useState('');
   const [passwordError, setPasswordError] = React.useState(false);
@@ -71,10 +73,6 @@ export default function SignIn(props: { disableCustomTheme?: boolean }) {
 
     if(!validateInputs()) return;
 
-    const data = new FormData(event.currentTarget);
-    const email = String(data.get('email') || '');
-    const password = String(data.get('password') || '');
-
     try {
       await setPersistence(
         auth,
@@ -83,13 +81,6 @@ export default function SignIn(props: { disableCustomTheme?: boolean }) {
 
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
-      localStorage.setItem('authToken', user.uid);
-      localStorage.setItem('user', JSON.stringify({
-        uid: user.uid,
-        email: user.email,
-        displayName: user.displayName,
-        photoURL: user.photoURL,
-      }));
       
       await setDoc(doc(db, 'users', user.uid), {
         uid: user.uid,
@@ -106,12 +97,9 @@ export default function SignIn(props: { disableCustomTheme?: boolean }) {
   };
 
   const validateInputs = () => {
-    const email = document.getElementById('email') as HTMLInputElement;
-    const password = document.getElementById('password') as HTMLInputElement;
-
     let isValid = true;
 
-    if (!email.value || !/\S+@\S+\.\S+/.test(email.value)) {
+    if (!email || !/\S+@\S+\.\S+/.test(email)) {
       setEmailError(true);
       setEmailErrorMessage('Please enter a valid email address.');
       isValid = false;
@@ -120,7 +108,7 @@ export default function SignIn(props: { disableCustomTheme?: boolean }) {
       setEmailErrorMessage('');
     }
 
-    if (!password.value || password.value.length < 6) {
+    if (!password || password.length < 6) {
       setPasswordError(true);
       setPasswordErrorMessage('Password must be at least 6 characters long.');
       isValid = false;
@@ -171,6 +159,8 @@ export default function SignIn(props: { disableCustomTheme?: boolean }) {
                 fullWidth
                 variant="outlined"
                 color={emailError ? 'error' : 'primary'}
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
               />
             </FormControl>
             <FormControl>
@@ -187,6 +177,8 @@ export default function SignIn(props: { disableCustomTheme?: boolean }) {
                 fullWidth
                 variant="outlined"
                 color={passwordError ? 'error' : 'primary'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
               />
             </FormControl>
             <FormControlLabel
