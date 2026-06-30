@@ -28,7 +28,8 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import { useUser } from './hooks/useUser';
 import { useSupervisorChain } from './hooks/useSupervisorChain';
 import { useUserCache } from './hooks/useUserCache';
-import { db, auth } from '../../firebase/firebase';
+import { db } from '../../firebase/firebase';
+import { useAuth } from '../../firebase/AuthContext';
 import {
   collection,
   addDoc,
@@ -52,7 +53,6 @@ interface CalendarEvent {
   mandatory?: boolean;
   createdBy: string;
   createdByName?: string;
-  createdAt: Date;
 }
 
 interface RSVP {
@@ -63,7 +63,7 @@ interface RSVP {
 }
 
 const EventsPage: React.FC = () => {
-  const { currentUser } = auth;
+  const { currentUser } = useAuth();
   const { userJob } = useUser();
   const { canEditUserContent } = useSupervisorChain();
   const { getMultipleUsers } = useUserCache();
@@ -105,17 +105,17 @@ const EventsPage: React.FC = () => {
           const data = docSnap.data();
           creatorIds.add(data.createdBy);
 
-          const startDate = data.date?.toDate?.() || new Date(data.date);
+          const startDate = data.startDate?.toDate?.() || new Date(data.date);
+          const endDate = data.endDate?.toDate?.() || new Date(startDate.getTime() + 3600000);
           eventsData.push({
             id: docSnap.id,
             title: data.title,
             description: data.description,
             startDate,
-            endDate: new Date(startDate.getTime() + 3600000), // 1 hour duration
+            endDate,
             location: data.location,
             mandatory: data.mandatory,
             createdBy: data.createdBy,
-            createdAt: data.createdAt?.toDate?.() || new Date(data.createdAt),
           });
         }
 

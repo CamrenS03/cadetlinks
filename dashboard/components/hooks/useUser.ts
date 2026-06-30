@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { db, auth } from '../../../firebase/firebase';
+import { db } from '../../../firebase/firebase';
+import { useAuth } from '../../../firebase/AuthContext'
 import { doc, getDoc, onSnapshot } from 'firebase/firestore';
 
 interface Job {
@@ -24,7 +25,6 @@ interface UserData {
   jobId: string;
   supervisorIds: string[];
   superviseeIds: string[];
-  createdAt?: Date;
   lastSignIn?: Date;
 }
 
@@ -33,7 +33,7 @@ interface UserData {
  * Provides access to permissions, job details, and supervisor relationships
  */
 export const useUser = () => {
-  const { currentUser } = auth;
+  const { currentUser } = useAuth();
   const [userData, setUserData] = useState<UserData | null>(null);
   const [userJob, setUserJob] = useState<Job | null>(null);
   const [loading, setLoading] = useState(true);
