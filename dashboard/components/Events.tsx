@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Box,
   Button,
@@ -26,7 +26,6 @@ import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import { useUser } from './hooks/useUser';
-import { useSupervisorChain } from './hooks/useSupervisorChain';
 import { useUserCache } from './hooks/useUserCache';
 import { db } from '../../firebase/firebase';
 import { useAuth } from '../../firebase/AuthContext';
@@ -41,14 +40,15 @@ import {
   where,
   onSnapshot,
   serverTimestamp,
+  Timestamp,
 } from 'firebase/firestore';
 
 interface CalendarEvent {
   id: string;
   title: string;
   description?: string;
-  startDate: Date;
-  endDate: Date;
+  start: Date;
+  end: Date;
   location?: string;
   mandatory?: boolean;
   createdBy: string;
@@ -62,12 +62,25 @@ interface RSVP {
   timestamp: Date;
 }
 
-const EventsPage: React.FC = () => {
+const defaultFormData = () => ({
+  title: '',
+  description: '',
+  location: '',
+  mandatory: false,
+  start: new Date(),
+  end: new Date(Date.now() + 3600000),
+});
+
+const toLocalDatetimeValue = (date: Date) =>
+  new Date(date.getTime() - date.getTimezoneOffset() * 60000)
+    .toISOString()
+    .slice(0, 16);
+
+const Events: React.FC = () => {
   const { currentUser } = useAuth();
   const { userJob } = useUser();
-  const { canEditUserContent } = useSupervisorChain();
   const { getMultipleUsers } = useUserCache();
-  
+
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [rsvpMap, setRsvpMap] = useState<Map<string, RSVP[]>>(new Map());
   const [loading, setLoading] = useState(true);
@@ -77,19 +90,16 @@ const EventsPage: React.FC = () => {
   const [openEventDetails, setOpenEventDetails] = useState(false);
   const [openDeleteConfirm, setOpenDeleteConfirm] = useState(false);
   const [openRSVPList, setOpenRSVPList] = useState(false);
-  const [formData, setFormData] = useState({
-    title: '',
-    description: '',
-    location: '',
-    mandatory: false,
-    startDate: new Date(),
-    endDate: new Date(Date.now() + 3600000), // 1 hour later
-  });
+  const [formData, setFormData] = useState(defaultFormData());
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [userRsvpStatus, setUserRsvpStatus] = useState<Map<string, boolean>>(new Map());
 
-  // Check if current user can manage events
   const canManageEvents = userJob?.permissions?.includes('manage_events') ?? false;
+  const canManageAllEvents = userJob?.permissions?.includes('manage_all_events')?? false;
+  const canEditSelected = useMemo(
+    () => !!selectedEvent && (selectedEvent.createdBy === currentUser?.uid || canManageAllEvents),
+    [selectedEvent, currentUser, canManageAllEvents]
+  );
 
   // Fetch events and RSVPs
   useEffect(() => {
@@ -105,14 +115,18 @@ const EventsPage: React.FC = () => {
           const data = docSnap.data();
           creatorIds.add(data.createdBy);
 
-          const startDate = data.startDate?.toDate?.() || new Date(data.date);
-          const endDate = data.endDate?.toDate?.() || new Date(startDate.getTime() + 3600000);
+          const start = data.startDate instanceof Timestamp
+            ? data.startDate.toDate()
+            : new Date(data.startDate);
+          const end = data.endDate instanceof Timestamp
+            ? data.endDate.toDate()
+            : new Date(start.getTime() + 3600000);
           eventsData.push({
             id: docSnap.id,
             title: data.title,
             description: data.description,
-            startDate,
-            endDate,
+            start,
+            end,
             location: data.location,
             mandatory: data.mandatory,
             createdBy: data.createdBy,
@@ -128,39 +142,36 @@ const EventsPage: React.FC = () => {
         setEvents(eventsData);
 
         // Fetch RSVPs for all events
-        const rsvpMapTemp = new Map<string, RSVP[]>();
-        const userRsvpStatusTemp = new Map<string, boolean>();
         const allRsvpUserIds = new Set<string>();
+        const rsvpDocsMap = new Map<string, { id: string, userId: string; timestamp: any }[]>();
 
         // First pass: collect all user IDs from RSVPs
         for (const event of eventsData) {
           const rsvpsSnap = await getDocs(collection(db, 'events', event.id, 'rsvps'));
-          rsvpsSnap.docs.forEach((doc) => allRsvpUserIds.add(doc.data().userId));
+          const docs = rsvpsSnap.docs.map((d) => ({ id: d.id, ...d.data() as { userId: string; timestamp: any } }));
+          rsvpDocsMap.set(event.id, docs);
+          docs.forEach((d) => allRsvpUserIds.add(d.userId));
         }
 
         // Batch fetch all RSVP user names
         const userNamesMap = await getMultipleUsers(Array.from(allRsvpUserIds));
+        const rsvpMapTemp = new Map<string, RSVP[]>();
+        const userRsvpStatusTemp = new Map<string, boolean>();
 
         // Second pass: populate RSVP with user names
         for (const event of eventsData) {
-          const rsvpsSnap = await getDocs(collection(db, 'events', event.id, 'rsvps'));
-          const rsvps: RSVP[] = [];
+          const docs = rsvpDocsMap.get(event.id) || [];
+          const rsvps: RSVP[] = docs.map((d) => ({
+            id: d.id,
+            userId: d.userId,
+            userName: userNamesMap.get(d.userId)?.displayName || d.userId,
+            timestamp: d.timestamp instanceof Timestamp ? d.timestamp.toDate() : new Date(d.timestamp),
+          }));
           
-          for (const rsvpDoc of rsvpsSnap.docs) {
-            const rsvpData = rsvpDoc.data();
-            const userName = userNamesMap.get(rsvpData.userId)?.displayName || rsvpData.userId;
-            rsvps.push({
-              id: rsvpDoc.id,
-              userId: rsvpData.userId,
-              userName,
-              timestamp: rsvpData.timestamp?.toDate?.() || new Date(rsvpData.timestamp),
-            });
-            
-            if (rsvpData.userId === currentUser.uid) {
-              userRsvpStatusTemp.set(event.id, true);
-            }
-          }
           rsvpMapTemp.set(event.id, rsvps);
+          if (docs.some((d) => d.userId === currentUser.uid)) {
+            userRsvpStatusTemp.set(event.id, true);
+          }
         }
 
         setRsvpMap(rsvpMapTemp);
@@ -176,16 +187,6 @@ const EventsPage: React.FC = () => {
     return unsubscribe;
   }, [currentUser, getMultipleUsers]);
 
-  // Check if user can edit an event
-  const canEditEvent = useCallback(
-    async (event: CalendarEvent): Promise<boolean> => {
-      if (!currentUser) return false;
-      return await canEditUserContent(currentUser.uid, event.createdBy);
-    },
-    [currentUser, canEditUserContent]
-  );
-
-  // Handle create new event
   const handleCreateEvent = async () => {
     if (!currentUser || !formData.title) {
       setError('Please fill in all required fields');
@@ -196,22 +197,16 @@ const EventsPage: React.FC = () => {
       await addDoc(collection(db, 'events'), {
         title: formData.title,
         description: formData.description || '',
-        date: formData.startDate,
+        startDate: Timestamp.fromDate(formData.start),
+        endDate: Timestamp.fromDate(formData.end),
         location: formData.location || '',
-        mandatory: formData.mandatory || false,
+        mandatory: formData.mandatory,
         createdBy: currentUser.uid,
         createdAt: serverTimestamp(),
       });
 
       setOpenEventForm(false);
-      setFormData({
-        title: '',
-        description: '',
-        location: '',
-        mandatory: false,
-        startDate: new Date(),
-        endDate: new Date(Date.now() + 3600000),
-      });
+      setFormData(defaultFormData());
       setError(null);
     } catch (err) {
       console.error('Error creating event:', err);
@@ -219,7 +214,6 @@ const EventsPage: React.FC = () => {
     }
   };
 
-  // Handle update event
   const handleUpdateEvent = async () => {
     if (!selectedEvent || !formData.title) {
       setError('Please fill in all required fields');
@@ -230,21 +224,15 @@ const EventsPage: React.FC = () => {
       await updateDoc(doc(db, 'events', selectedEvent.id), {
         title: formData.title,
         description: formData.description || '',
-        date: formData.startDate,
+        startDate: Timestamp.fromDate(formData.start),
+        endDate: Timestamp.fromDate(formData.end),
         location: formData.location || '',
-        mandatory: formData.mandatory || false,
+        mandatory: formData.mandatory,
       });
 
       setOpenEventForm(false);
       setSelectedEvent(null);
-      setFormData({
-        title: '',
-        description: '',
-        location: '',
-        mandatory: false,
-        startDate: new Date(),
-        endDate: new Date(Date.now() + 3600000),
-      });
+      setFormData(defaultFormData());
       setError(null);
     } catch (err) {
       console.error('Error updating event:', err);
@@ -252,7 +240,6 @@ const EventsPage: React.FC = () => {
     }
   };
 
-  // Handle delete event
   const handleDeleteEvent = async () => {
     if (!selectedEvent) return;
 
@@ -268,26 +255,38 @@ const EventsPage: React.FC = () => {
     }
   };
 
-  // Handle RSVP toggle
   const handleRSVPToggle = async (event: CalendarEvent) => {
     if (!currentUser) return;
 
+    const isRsvped = userRsvpStatus.get(event.id);
     try {
-      const isRsvped = userRsvpStatus.get(event.id);
-
       if (isRsvped) {
-        // Remove RSVP
         const rsvpsSnap = await getDocs(
           query(collection(db, 'events', event.id, 'rsvps'), where('userId', '==', currentUser.uid))
         );
         for (const rsvpDoc of rsvpsSnap.docs) {
           await deleteDoc(rsvpDoc.ref);
         }
+        //Remove from local rsvpMap
+        setRsvpMap((prev) => {
+          const next = new Map(prev);
+          next.set(event.id, (next.get(event.id) || []).filter((r) => r.userId !== currentUser.uid));
+          return next;
+        });
       } else {
-        // Add RSVP
         await addDoc(collection(db, 'events', event.id, 'rsvps'), {
           userId: currentUser.uid,
           timestamp: serverTimestamp(),
+        });
+        // Add to local rsvpMap
+        setRsvpMap((prev) => {
+          const next = new Map(prev);
+          const existing = next.get(event.id) || [];
+          next.set(event.id, [
+            ...existing,
+            { userId: currentUser.uid, userName: currentUser.displayName || currentUser.email || 'You', timestamp: new Date() },
+          ]);
+          return next;
         });
       }
 
@@ -298,44 +297,29 @@ const EventsPage: React.FC = () => {
     }
   };
 
-  // Handle open event edit
-  const handleOpenEdit = async (event: CalendarEvent) => {
-    const hasPermission = await canEditEvent(event);
-    if (!hasPermission) {
-      setError('You do not have permission to edit this event');
-      return;
-    }
+  const handleOpenEdit = useCallback((event: CalendarEvent) => {
     setSelectedEvent(event);
     setFormData({
       title: event.title,
       description: event.description || '',
-      startDate: event.startDate,
-      endDate: event.endDate,
+      start: event.start,
+      end: event.end,
       location: event.location || '',
       mandatory: event.mandatory || false,
     });
     setOpenEventForm(true);
     setAnchorEl(null);
-  };
+  }, []);
 
-  // Handle open event details
-  const handleOpenDetails = (event: CalendarEvent) => {
+  const handleOpenDetails = useCallback((event: CalendarEvent) => {
     setSelectedEvent(event);
     setOpenEventDetails(true);
     setAnchorEl(null);
-  };
+  }, []);
 
-  const handleMenuClick = (event: React.MouseEvent<HTMLElement>, clickedEvent: CalendarEvent) => {
-    setSelectedEvent(clickedEvent);
-    setAnchorEl(event.currentTarget);
-  };
-
-  const handleMenuClose = () => {
-    setAnchorEl(null);
-  };
-
-  const handleEventClick = (calendarEvent: CalendarEvent) => {
-    handleOpenDetails(calendarEvent);
+  const handleMenuClick = (e: React.MouseEvent<HTMLElement>, event: CalendarEvent) => {
+    setSelectedEvent(event);
+    setAnchorEl(e.currentTarget);
   };
 
   if (loading) {
@@ -367,14 +351,7 @@ const EventsPage: React.FC = () => {
             color="primary"
             onClick={() => {
               setSelectedEvent(null);
-              setFormData({
-                title: '',
-                description: '',
-                location: '',
-                mandatory: false,
-                startDate: new Date(),
-                endDate: new Date(Date.now() + 3600000),
-              });
+              setFormData(defaultFormData());
               setOpenEventForm(true);
             }}
           >
@@ -390,21 +367,71 @@ const EventsPage: React.FC = () => {
       )}
 
       {/* Event Calendar */}
-      <Paper sx={{ flex: 1, overflow: 'auto' }}>
+      <Paper sx={{ flex: '0 0 auto', height: '420px', overflow: 'auto', mb: 2 }}>
         <EventCalendar
           events={events}
-          onEventsChange={(updatedEvents: CalendarEvent[]) => {
-            setEvents(updatedEvents);
-          }}
+          readOnly
+          areEventsDraggable={false}
+          areEventsResizable={false}
           sx={{ height: '100%' }}
         />
       </Paper>
 
-      {/* Create/Edit Event Modal */}
+      {/* Clickable event list */}
+      <Paper sx={{ flex: 1, overflow: 'auto', mb: 2 }}>
+        {events.length === 0 ? (
+          <Typography color="textSecondary" sx={{ p: 2, textAlign: 'center' }}>
+            No events scheduled
+          </Typography>
+        ) : (
+          [...events]
+            .sort((a, b) => a.start.getTime() - b.start.getTime())
+            .map((event) => (
+              <Box
+                key={event.id}
+                onClick={() => handleOpenDetails(event)}
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  px: 2,
+                  py: 1.5,
+                  cursor: 'pointer',
+                  borderBottom: '1px solid',
+                  borderColor: 'divider',
+                  '&:hover': { bgcolor: 'action.hover' },
+                  '&:last-child': { borderBottom: 'none' },
+                }}
+              >
+                <Box>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Typography variant="body1" sx={{ fontWeight: 500 }}>
+                      {event.title}
+                    </Typography>
+                    {event.mandatory && (
+                      <Chip label="Mandatory" color="error" size="small" />
+                    )}
+                  </Box>
+                  <Typography variant="body2" color="textSecondary">
+                    {event.start.toLocaleString()} — {event.end.toLocaleString()}
+                  </Typography>
+                  {event.location && (
+                    <Typography variant="body2" color="textSecondary">
+                      {event.location}
+                    </Typography>
+                  )}
+                </Box>
+                <Typography variant="body2" color="textSecondary">
+                  {rsvpMap.get(event.id)?.length ?? 0} RSVP{(rsvpMap.get(event.id)?.length ?? 0) !== 1 ? 's' : ''}
+                </Typography>
+              </Box>
+            ))
+        )}
+      </Paper>
+
+      {/* Create/Edit Event Form */}
       <Dialog open={openEventForm} onClose={() => setOpenEventForm(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>
-          {selectedEvent ? 'Edit Event' : 'Create New Event'}
-        </DialogTitle>
+        <DialogTitle>{selectedEvent ? 'Edit Event' : 'Create New Event'}</DialogTitle>
         <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
           <TextField
             label="Event Title"
@@ -425,8 +452,17 @@ const EventsPage: React.FC = () => {
             label="Start Date & Time"
             type="datetime-local"
             fullWidth
-            value={formData.startDate.toISOString().slice(0, 16)}
-            onChange={(e) => setFormData({ ...formData, startDate: new Date(e.target.value) })}
+            value={toLocalDatetimeValue(formData.start)}
+            onChange={(e) => setFormData({ ...formData, start: new Date(e.target.value) })}
+            slotProps={{ inputLabel: { shrink: true } }}
+            required
+          />
+          <TextField
+            label="End Date & Time"
+            type="datetime-local"
+            fullWidth
+            value={toLocalDatetimeValue(formData.end)}
+            onChange={(e) => setFormData({ ...formData, end: new Date(e.target.value) })}
             slotProps={{ inputLabel: { shrink: true } }}
             required
           />
@@ -483,47 +519,37 @@ const EventsPage: React.FC = () => {
                     <Chip label="Mandatory" color="error" size="small" sx={{ mt: 1 }} />
                   )}
                 </Box>
-                <Box>
-                  {canManageEvents && (
-                    <IconButton
-                      onClick={(e) => handleMenuClick(e, selectedEvent)}
-                      size="small"
-                    >
-                      <MoreVertIcon />
-                    </IconButton>
-                  )}
-                </Box>
+                {canEditSelected && (
+                  <IconButton onClick={(e) => handleMenuClick(e, selectedEvent)} size='small'>
+                    <MoreVertIcon />
+                  </IconButton>
+                )}
               </Box>
 
               <Divider sx={{ my: 2 }} />
 
               <Box sx={{ mb: 2 }}>
-                <Typography variant="subtitle2" color="textSecondary">
-                  Date & Time
-                </Typography>
-                <Typography>
-                  {selectedEvent.startDate.toLocaleString()}
-                </Typography>
+                <Typography variant="subtitle2" color="textSecondary">Start</Typography>
+                <Typography>{selectedEvent.start.toLocaleString()}</Typography>
               </Box>
 
               <Box sx={{ mb: 2 }}>
-                <Typography variant="subtitle2" color="textSecondary">
-                  Location
-                </Typography>
+                <Typography variant="subtitle2" color="textSecondary">End</Typography>
+                <Typography>{selectedEvent.end.toLocaleString()}</Typography>
+              </Box>
+
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="subtitle2" color="textSecondary">Location</Typography>
                 <Typography>{selectedEvent.location || 'TBA'}</Typography>
               </Box>
 
               <Box sx={{ mb: 2 }}>
-                <Typography variant="subtitle2" color="textSecondary">
-                  Description
-                </Typography>
+                <Typography variant="subtitle2" color="textSecondary">Description</Typography>
                 <Typography>{selectedEvent.description || 'No description provided'}</Typography>
               </Box>
 
               <Box sx={{ mb: 2 }}>
-                <Typography variant="subtitle2" color="textSecondary">
-                  Created By
-                </Typography>
+                <Typography variant="subtitle2" color="textSecondary">Created By</Typography>
                 <Typography>{selectedEvent.createdByName || selectedEvent.createdBy}</Typography>
               </Box>
 
@@ -536,9 +562,7 @@ const EventsPage: React.FC = () => {
                     fullWidth
                     variant={userRsvpStatus.get(selectedEvent.id) ? 'contained' : 'outlined'}
                     color="primary"
-                    startIcon={
-                      userRsvpStatus.get(selectedEvent.id) ? <CheckCircleIcon /> : undefined
-                    }
+                    startIcon={userRsvpStatus.get(selectedEvent.id) ? <CheckCircleIcon /> : undefined}
                     onClick={() => handleRSVPToggle(selectedEvent)}
                   >
                     {userRsvpStatus.get(selectedEvent.id) ? "RSVP'd" : 'RSVP'}
@@ -547,7 +571,7 @@ const EventsPage: React.FC = () => {
               )}
 
               {/* RSVP List */}
-              <Box>
+              <Box sx={{ mb: 2 }}>
                 <Button
                   fullWidth
                   variant="outlined"
@@ -570,15 +594,15 @@ const EventsPage: React.FC = () => {
         </Paper>
       </Modal>
 
-      {/* RSVP List Modal */}
+      {/* RSVP List */}
       <Dialog open={openRSVPList} onClose={() => setOpenRSVPList(false)} maxWidth="sm" fullWidth>
         <DialogTitle>RSVPs - {selectedEvent?.title}</DialogTitle>
         <DialogContent>
-          {rsvpMap.get(selectedEvent?.id!)?.length ? (
+          {(rsvpMap.get(selectedEvent?.id ?? '')?.length ?? 0) > 0 ? (
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mt: 2 }}>
-              {rsvpMap.get(selectedEvent?.id!)?.map((rsvp) => (
+              {rsvpMap.get(selectedEvent?.id ?? '')?.map((rsvp) => (
                 <Chip
-                  key={rsvp.id}
+                  key={rsvp.id ?? rsvp.userId}
                   label={rsvp.userName}
                   variant="outlined"
                   sx={{ justifyContent: 'flex-start' }}
@@ -586,7 +610,7 @@ const EventsPage: React.FC = () => {
               ))}
             </Box>
           ) : (
-            <Typography color="textSecondary">No one has RSVP'd yet</Typography>
+            <Typography color="textSecondary" sx={{ mt: 2 }}>No one has RSVP'd yet</Typography>
           )}
         </DialogContent>
         <DialogActions>
@@ -595,30 +619,28 @@ const EventsPage: React.FC = () => {
       </Dialog>
 
       {/* Event Menu */}
-      <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={handleMenuClose}>
+      <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={() => setAnchorEl(null)}>
         <MenuItem onClick={() => selectedEvent && handleOpenEdit(selectedEvent)}>
           <EditIcon sx={{ mr: 1 }} /> Edit
         </MenuItem>
-        <MenuItem onClick={() => setOpenDeleteConfirm(true)}>
+        <MenuItem onClick={() => { setOpenDeleteConfirm(true); setAnchorEl(null); }}>
           <DeleteIcon sx={{ mr: 1 }} /> Delete
         </MenuItem>
       </Menu>
 
-      {/* Delete Confirmation Modal */}
+      {/* Delete Confirmation */}
       <Dialog open={openDeleteConfirm} onClose={() => setOpenDeleteConfirm(false)}>
         <DialogTitle>Delete Event</DialogTitle>
         <DialogContent>
-          Are you sure you want to delete "{selectedEvent?.title}"? This action cannot be undone.
+          Are you sure you want to delete "{selectedEvent?.title}"? This cannot be undone.
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setOpenDeleteConfirm(false)}>Cancel</Button>
-          <Button onClick={handleDeleteEvent} color="error" variant="contained">
-            Delete
-          </Button>
+          <Button onClick={handleDeleteEvent} color="error" variant="contained">Delete</Button>
         </DialogActions>
       </Dialog>
     </Box>
   );
 };
 
-export default EventsPage;
+export default Events;
