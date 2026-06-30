@@ -369,7 +369,7 @@ const Events: React.FC = () => {
       {/* Event Calendar */}
       <Paper sx={{ flex: '0 0 auto', height: '420px', overflow: 'auto', mb: 2 }}>
         <EventCalendar
-          events={events}
+          events={events.map((e) => ({ ...e, start: e.start.toISOString(), end: e.end.toISOString() }))}
           readOnly
           areEventsDraggable={false}
           areEventsResizable={false}
