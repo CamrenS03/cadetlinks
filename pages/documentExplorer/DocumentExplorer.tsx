@@ -62,6 +62,7 @@ interface DocItem {
     name: string,
     type: 'folder' | 'file',
     parentId: string | null,
+    pocOnly?: boolean,
     downloadURL?: string,
     storagePath?: string,
     uploadedBy?: string,
@@ -75,8 +76,9 @@ interface BreadCrumbEntry {
 
 export default function DocumentExplorer(props: { disableCustomTheme?: boolean }) {
     const { currentUser } = useAuth();
-    const { userJob } = useUser();
+    const { userJob, userData } = useUser();
     const canManage = userJob?.permissions?.includes('manage_documents') ?? false;
+    const isPOC = userData?.flight === 'POC';
 
     const [items, setItems] = useState<DocItem[]>([]);
     const [loading, setLoading] = useState(true);
@@ -118,7 +120,7 @@ export default function DocumentExplorer(props: { disableCustomTheme?: boolean }
     }, [currentFolderId]);
 
     const filtered = items.filter((item) =>
-        item.name.toLowerCase().includes(search.toLowerCase())
+        item.name.toLowerCase().includes(search.toLowerCase()) && (!item.pocOnly || isPOC)
     );
 
     const sorted = [...filtered].sort((a, b) => {
