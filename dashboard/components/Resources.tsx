@@ -70,7 +70,7 @@ export default function Resources() {
             <Typography variant='h5' sx={{ fontWeight: 600, mb: 3 }}>Resources</Typography>
             <Grid container spacing={2}>
                 {resources.map((resource) => (
-                    <Grid item xs={6} key={resource.page}>
+                    <Grid item='true' xs={6} key={resource.page}>
                         <Card variant='outlined' sx={{ height: '100%', opacity: resource.locked ? 0.5: 1, position: 'relative' }}>
                             <CardActionArea
                                 disabled={resource.locked}
