@@ -58,7 +58,7 @@ export default function Dashboard(props: { disableCustomTheme?: boolean }) {
                 </Box>
                 <IconButton aria-label='logout' size='small' onClick={handleLogout} sx={{ position: 'fixed', top: '1rem', right: '1rem' }}>{<Logout />}</IconButton>
                 <ColorModeIconDropdown sx={{ position: 'fixed', top: '1rem', right: '3.5rem' }} />
-                <Box sx={{ flex: 1, width: '100%' }}>
+                <Box sx={{ flex: 1, width: '100%', minHeight: 0, overflow: 'hidden' }}>
                     {renderContent()}
                 </Box>
                 <BottomNavigation value={value} onChange={(e, newValue) => setValue(newValue)} />

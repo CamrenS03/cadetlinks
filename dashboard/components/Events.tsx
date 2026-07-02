@@ -157,14 +157,14 @@ const Events: React.FC = () => {
         </Alert>
       )}
 
-      <Paper sx={{ flex: 1, overflow: 'hidden' }}>
+      <Paper sx={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         <EventCalendar
           events={events.map((e) => ({ ...e, start: e.start.toISOString(), end: e.end.toISOString() }))}
           onEventsChange={handleEventsChange}
           areEventsDraggable
           areEventsResizable
           eventCreation={{ interaction: 'double-click' }}
-          sx={{ height: '100%' }}
+          sx={{ flex: 1, minHeight: 0, overflow: 'auto' }}
         />
       </Paper>
     </Box>
