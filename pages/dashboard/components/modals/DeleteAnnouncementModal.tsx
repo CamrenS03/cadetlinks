@@ -1,6 +1,6 @@
 import { collection, deleteDoc, doc, getDoc, onSnapshot, query, where } from 'firebase/firestore';
 import React, { useState, useEffect } from 'react';
-import { db } from '../../../firebase/firebase'
+import { db } from '../../../../firebase/firebase'
 import {
     Dialog,
     DialogTitle,

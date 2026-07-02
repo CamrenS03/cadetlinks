@@ -13,8 +13,8 @@ import {
   getDoc,
   getDocs,
 } from 'firebase/firestore';
-import { db } from "../../firebase/firebase";
-import { useAuth } from "../../firebase/AuthContext";
+import { db } from "../../../firebase/firebase";
+import { useAuth } from "../../../firebase/AuthContext";
 import AddAnnouncementModal from "./modals/AddAnnouncementModal";
 import DeleteAnnouncementModal from "./modals/DeleteAnnouncementModal";
 

@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { db } from '../../../firebase/firebase';
+import { db } from '../firebase/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 
 interface CachedUser {

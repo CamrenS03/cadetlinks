@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { db } from '../../../firebase/firebase';
-import { useAuth } from '../../../firebase/AuthContext'
+import { db } from '../firebase/firebase';
+import { useAuth } from '../firebase/AuthContext'
 import { doc, getDoc, onSnapshot } from 'firebase/firestore';
 
 interface Job {

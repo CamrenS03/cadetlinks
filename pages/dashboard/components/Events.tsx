@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Box, CircularProgress, Alert, Typography, Paper } from '@mui/material';
 import { EventCalendar } from '@mui/x-scheduler';
-import { db } from '../../firebase/firebase';
-import { useAuth } from '../../firebase/AuthContext';
+import { db } from '../../../firebase/firebase';
+import { useAuth } from '../../../firebase/AuthContext';
 import {
   collection,
   setDoc,

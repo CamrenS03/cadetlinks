@@ -13,8 +13,8 @@ import {
     Box,
 } from '@mui/material';
 import { collection, addDoc, Timestamp } from 'firebase/firestore'
-import { db } from '../../../firebase/firebase';
-import { useAuth } from '../../../firebase/AuthContext';
+import { db } from '../../../../firebase/firebase';
+import { useAuth } from '../../../../firebase/AuthContext';
 
 interface AddAnnouncementModalProps {
     open: boolean;

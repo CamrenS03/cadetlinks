@@ -33,12 +33,12 @@ import CreateNewFolderIcon from '@mui/icons-material/CreateNewFolder';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import DownloadIcon from '@mui/icons-material/Download';
 import CloseIcon from '@mui/icons-material/Close';
-import AppTheme from '../shared-theme/AppTheme';
-import AppHeader from '../shared-theme/Header';
-import { AppContainer } from '../shared-theme/AppContainer';
-import { useUser } from '../hooks/useUser';
-import { useAuth } from '../firebase/AuthContext';
-import { db, storage } from '../firebase/firebase';
+import AppTheme from '../../shared-theme/AppTheme';
+import AppHeader from '../../shared-theme/Header';
+import { AppContainer } from '../../shared-theme/AppContainer';
+import { useUser } from '../../hooks/useUser';
+import { useAuth } from '../../firebase/AuthContext';
+import { db, storage } from '../../firebase/firebase';
 import {
   collection,
   query,

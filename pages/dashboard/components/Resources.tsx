@@ -13,7 +13,7 @@ import FactCheckIcon from '@mui/icons-material/FactCheck';
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
 import LockIcon from '@mui/icons-material/Lock';
 import { useNavigate } from 'react-router-dom';
-import { useUser } from '../../hooks/useUser';
+import { useUser } from '../../../hooks/useUser';
 
 interface ResourceCard {
     label: string,

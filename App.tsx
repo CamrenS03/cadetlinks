@@ -1,8 +1,8 @@
 import { Routes, Route } from 'react-router-dom';
 import ProtectedRoute from './ProtectedRoute';
-import SignIn from './sign-in/SignIn';
-import Dashboard from './dashboard/Dashboard';
-import DocumentExplorer from './documentExplorer/DocumentExplorer';
+import SignIn from './pages/sign-in/SignIn';
+import Dashboard from './pages/dashboard/Dashboard';
+import DocumentExplorer from './pages/documentExplorer/DocumentExplorer';
 
 export default function App() {
     return (
