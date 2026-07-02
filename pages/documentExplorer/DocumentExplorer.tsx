@@ -36,7 +36,7 @@ import CloseIcon from '@mui/icons-material/Close';
 import AppTheme from '../shared-theme/AppTheme';
 import AppHeader from '../shared-theme/Header';
 import { AppContainer } from '../shared-theme/AppContainer';
-import { useUser } from '../dashboard/components/hooks/useUser';
+import { useUser } from '../hooks/useUser';
 import { useAuth } from '../firebase/AuthContext';
 import { db, storage } from '../firebase/firebase';
 import {
