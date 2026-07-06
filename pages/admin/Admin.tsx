@@ -3,13 +3,13 @@ import { Box, CssBaseline, Tab, Tabs } from '@mui/material';
 import AppTheme from '../../shared-theme/AppTheme';
 import AppHeader from '../../shared-theme/Header';
 import { AppContainer } from '../../shared-theme/AppContainer';
-//import UsersTab from './components/UsersTab'
-//import JobsTab from './components/JobsTab'
+import UsersTab from './components/UsersTab'
+import JobsTab from './components/JobsTab'
 import EventsTab from './components/EventsTab'
 
 const TABS = [
-//    { label: 'Users', component: <UsersTab /> },
-//    { label: 'Jobs', component: <JobsTab /> },
+    { label: 'Users', component: <UsersTab /> },
+    { label: 'Jobs', component: <JobsTab /> },
     { label: 'Events', component: <EventsTab /> }
 ];
 

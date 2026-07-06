@@ -7,7 +7,7 @@ import {
   signInWithEmailAndPassword 
 } from 'firebase/auth';
 import { auth, db } from '../../firebase/firebase';
-import { doc, setDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import {
   Box,
   Button,
@@ -81,14 +81,19 @@ export default function SignIn(props: { disableCustomTheme?: boolean }) {
 
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
-      
-      await setDoc(doc(db, 'users', user.uid), {
+
+      const userRef = doc(db, 'users', user.uid);
+      const existing = await getDoc(userRef);
+      const baseFields: Record<string, any> = {
         uid: user.uid,
         email: user.email,
-        displayName: user.displayName,
-        photoURL: user.photoURL,
-        lastSignIn: new Date()
-      }, { merge: true });
+        lastSignIn: serverTimestamp()
+      };
+      if(!existing.exists()) {
+        baseFields.displayName = user.displayName ?? user.email;
+        baseFields.photoURL = user.photoURL;
+      }
+      await setDoc(userRef, baseFields, {merge: true});
 
       navigate('/dashboard');
     } catch (error: any) {
