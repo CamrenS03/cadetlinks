@@ -4,6 +4,10 @@ import {
     Box,
     Button,
     Checkbox,
+    Dialog,
+    DialogActions,
+    DialogContent,
+    DialogTitle,
     FormControl,
     FormControlLabel,
     FormGroup,
@@ -12,7 +16,7 @@ import {
     TextField,
     Typography
 } from '@mui/material';
-import { collection, doc, writeBatch, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { collection, doc, getDocs, query, where, writeBatch, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { db } from '../../../firebase/firebase';
 import { useAuth } from '../../../firebase/AuthContext';
 
@@ -38,6 +42,29 @@ export default function EventsTab() {
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
+    const [deletingPast, setDeletingPast] = useState(false);
+    const [openDeletePastConfirm, setOpenDeletePastConfirm] = useState(false);
+
+    const handleDeletePastEvents = async () => {
+        setOpenDeletePastConfirm(false);
+        setDeletingPast(true);
+        try {
+            const now = Timestamp.now();
+            const snap = await getDocs(query(collection(db, 'events'), where('endDate', '<', now)));
+            const BATCH_SIZE = 499;
+            for(let i = 0; i < snap.docs.length; i += BATCH_SIZE) {
+                const batch = writeBatch(db);
+                snap.docs.slice(i, i + BATCH_SIZE).forEach((d) => batch.delete(d.ref));
+                await batch.commit();
+            }
+            setSuccess(`Deleted ${snap.docs.length} event(s)`);
+        } catch (err) {
+            console.error(err);
+            setError('Failed to delete past events');
+        } finally {
+            setDeletingPast(false);
+        }
+    };
 
     const toggleDay = (day: number) => {
         setSelectedDays((prev) =>
@@ -68,6 +95,7 @@ export default function EventsTab() {
                 if (selectedDays.includes(cursor.getDay())) {
                     occurrences.push(new Date(cursor));
                 }
+                cursor.setDate(cursor.getDate() + 1);
             }
 
             if (occurrences.length === 0) {
@@ -100,7 +128,7 @@ export default function EventsTab() {
                 await batch.commit();
             }
 
-            setSuccess('Created ${occurrences.length} event(s)')
+            setSuccess(`Created ${occurrences.length} event(s)`)
             setEventName('');
             setSelectedDays([]);
             setStartDate('');
@@ -198,6 +226,30 @@ export default function EventsTab() {
             >
                 {loading ? 'Creating...' : 'Create Events'}
             </Button>
+
+            <Box sx={{ borderTop: 1, borderColor: 'divider', pt: 2, mt: 1 }}>
+                <Typography variant='h6' sx={{ mb: 1 }}>Maintanence</Typography>
+                <Button
+                    variant='outlined'
+                    color='error'
+                    onClick={() => setOpenDeletePastConfirm(true)}
+                    disabled={deletingPast}
+                >
+                    {deletingPast ? 'Deleting...' : 'Delete All Past Events'}
+                </Button>
+            </Box>
+
+            {/* Delete past events confirm */}
+            <Dialog open={openDeletePastConfirm} onClose={() => setOpenDeletePastConfirm(false)}>
+                <DialogTitle>Delete ALL Past Events?</DialogTitle>
+                <DialogContent>
+                    <Typography>This will permanently delete all events whose end time has already passed. This cannot be undone.</Typography>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setOpenDeletePastConfirm(false)}>Cancel</Button>
+                    <Button onClick={handleDeletePastEvents} color='error' variant='contained'>Delete</Button>
+                </DialogActions>
+            </Dialog>
         </Box>
     );
 }

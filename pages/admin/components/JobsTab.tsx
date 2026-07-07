@@ -9,6 +9,8 @@ import {
   DialogContent,
   DialogTitle,
   IconButton,
+  MenuItem,
+  Select,
   Table,
   TableBody,
   TableCell,
@@ -28,6 +30,7 @@ import {
   updateDoc,
   deleteDoc,
   addDoc,
+  writeBatch,
   serverTimestamp,
 } from 'firebase/firestore';
 import { db } from '../../../firebase/firebase';
@@ -98,6 +101,43 @@ export default function JobsTab() {
             setError('Failed to update permissions');
         }
     };
+
+    const handleParentChange = async (job: Job, newParentId: string) => {
+        const oldParentId = job.parentJobId ?? '';
+        if (newParentId === oldParentId) return;
+
+        const batch = writeBatch(db);
+
+        batch.update(doc(db, 'jobs', job.id), {parentJobId: newParentId || '' });
+
+        if (oldParentId) {
+            const oldParent = jobs.find((j) => j.id === oldParentId);
+            if (oldParent) {
+                batch.update(doc(db, 'jobs', oldParentId), {
+                    childJobIds: (oldParent.childJobIds ?? []).filter((id) => id !== job.id)
+                });
+            }
+        }
+
+        if (newParentId) {
+            const newParent = jobs.find((j) => j.id === newParentId);
+            if (newParent) {
+                const existing = newParent.childJobIds ?? [];
+                if (!existing.includes(job.id)) {
+                    batch.update(doc(db, 'jobs', newParentId), {
+                        childJobIds: [...existing, job.id]
+                    })
+                }
+            }
+        }
+
+        try {
+            await batch.commit();
+        } catch (err) {
+            console.error(err);
+            setError('Failed to update parent job');
+        }
+    };
     
     const handleAddJob = async () => {
         if(!newJobTitle.trim()) return;
@@ -105,6 +145,7 @@ export default function JobsTab() {
             await addDoc(collection(db, 'jobs'), {
                 title: newJobTitle.trim(),
                 permissions: [],
+                parentJobId: '',
                 childJobIds: [],
                 createdAt: serverTimestamp()
             });
@@ -126,6 +167,12 @@ export default function JobsTab() {
         }
     };
 
+    const childTitles = (job: Job) =>
+        (job.childJobIds ?? [])
+            .map((id) => jobs.find((j) => j.id === id)?.title)
+            .filter(Boolean)
+            .join(', ') || '-';
+
     const sorted = [...jobs].sort((a, b) => a.title.localeCompare(b.title));
 
     return (
@@ -136,7 +183,9 @@ export default function JobsTab() {
                 <Table size='small' stickyHeader>
                     <TableHead>
                         <TableRow>
-                            <TableCell sx={{ minWidth: 180 }}>Title</TableCell>
+                            <TableCell sx={{ minWidth: 160 }}>Title</TableCell>
+                            <TableCell sx={{ minWidth: 160 }}>Supervisor</TableCell>
+                            <TableCell sx={{ minWidth: 200 }}>Supervisees</TableCell>
                             {All_PERMISSIONS.map((p) => (
                                 <TableCell key={p} align='center' sx={{ whiteSpace: 'nowrap' }}>
                                     {PERMISSION_LABELS[p]}
@@ -160,6 +209,26 @@ export default function JobsTab() {
                                         sx={{ minWidth: 140 }}
                                     />
                                 </TableCell>
+                                <TableCell>
+                                    <Select
+                                        size='small'
+                                        value={job.parentJobId ?? ''}
+                                        onChange={(e) => handleParentChange(job, e.target.value)}
+                                        displayEmpty
+                                        variant='standard'
+                                        sx={{ minWidth: 140 }}
+                                    >
+                                        <MenuItem value=''><em>None</em></MenuItem>
+                                        {sorted
+                                            .filter((j) => j.id !== job.id)
+                                            .map((j) => (
+                                                <MenuItem key={j.id} value={j.id}>{j.title}</MenuItem>
+                                            ))}
+                                    </Select>
+                                </TableCell>
+                                <TableCell>
+                                    <Typography variant='body2' color='textSecondary'>{childTitles(job)}</Typography>
+                                </TableCell>
                                 {All_PERMISSIONS.map((p) => (
                                     <TableCell key={p} align='center' padding='checkbox'>
                                         <Checkbox
@@ -180,7 +249,7 @@ export default function JobsTab() {
                         ))}
                         {/* Add new job row */}
                         <TableRow>
-                            <TableCell colSpan={All_PERMISSIONS.length + 2}>
+                            <TableCell colSpan={All_PERMISSIONS.length + 4}>
                                 <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
                                     <TextField
                                         size='small'

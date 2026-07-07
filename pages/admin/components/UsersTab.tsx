@@ -142,6 +142,7 @@ export default function UsersTab() {
     const reassignJob = async (targetUser: UserRow, newJobId: string) => {
         const newJob = jobs.find((j) => j.id === newJobId);
         if (!newJob) {
+            console.error('[reassignJob] job not found');
             setError('Job not found, try again');
             return;
         }
@@ -214,7 +215,7 @@ export default function UsersTab() {
             }
         }
 
-        await batch.commit;
+        await batch.commit();
     };
 
     const handleAddUser = async () => {
@@ -287,6 +288,8 @@ export default function UsersTab() {
             for (const cadet of graduatingCadets) {
                 if (!keepMap[cadet.id]) {
                     batch.delete(doc(db, 'users', cadet.id));
+                } else {
+                    batch.update(doc(db, 'users', cadet.id), { classYear: '400' });
                 }
             }
             await batch.commit();
@@ -484,7 +487,7 @@ export default function UsersTab() {
                                             onChange={(e) => setKeepMap((m) => ({ ...m, [cadet.id]: e.target.checked }))}
                                         />   
                                     }
-                                    label={'${cadet.displayName — Keep'}
+                                    label={`${cadet.displayName} — Keep`}
                                 />
                             </ListItem>
                         ))}
