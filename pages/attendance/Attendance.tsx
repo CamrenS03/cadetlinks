@@ -4,11 +4,11 @@ import AppTheme from '../../shared-theme/AppTheme';
 import AppHeader from '../../shared-theme/Header';
 import { AppContainer } from '../../shared-theme/AppContainer';
 import Logger from './components/Logger'
-//import AttendanceSheet from './components/AttendanceSheet'
+import AttendanceSheet from './components/AttendanceSheet'
 
 const TABS = [
     { label: 'Logger', component: <Logger /> },
-    //{ label: 'Jobs', component: <JobsTab /> }
+    { label: 'Attendance Sheet', component: <AttendanceSheet /> }
 ];
 
 export default function Attendance(props: {disableCustomTheme?: boolean }) {
