@@ -17,7 +17,7 @@ import {
     Tooltip,
     Typography,
 } from '@mui/material';
-import { collection, collectionGroup, doc, getDocs, query, updateDoc, where } from 'firebase/firestore';
+import { collection, collectionGroup, doc, getDoc, getDocs, query, updateDoc, where } from 'firebase/firestore';
 import { getDownloadURL, ref, uploadBytesResumable } from 'firebase/storage';
 import React, { useEffect, useRef, useState } from 'react';
 import { db, storage } from '../../../firebase/firebase';
@@ -138,10 +138,7 @@ export default function Profile() {
             try {
                 const uid = userData.uid;
 
-                const [eventsSnap, attSnap] = await Promise.all([
-                    getDocs(query(collection(db, 'events'), where('mandatory', '==', true))),
-                    getDocs(query(collectionGroup(db, 'attendance'), where('userId', '==', uid))),
-                ]);
+                const eventsSnap = await getDocs(query(collection(db, 'events'), where('mandatory', '==', true)));
 
                 const eventTitles: Record<string, string> = {};
                 eventsSnap.docs.forEach((d) => {
@@ -153,9 +150,12 @@ export default function Profile() {
                     if (title == 'PT' || title == 'LLAB' || title == 'RMP') totalByType[title as EventType]++;
                 });
 
+                const attDocs = await Promise.all(eventsSnap.docs.map((e) => getDoc(doc(db, 'events', e.id, 'attendance', uid))));
+
                 const loggedByType: Record<EventType, AttendanceStatus[]> = { PT: [], LLAB: [], RMP: [] };
 
-                attSnap.docs.forEach((d) => {
+                attDocs.forEach((d) => {
+                    if(!d.exists()) return;
                     const eventId = d.ref.parent.parent!.id;
                     const type = eventTitles[eventId] as EventType | undefined;
                     if (type && type === 'PT' || type === 'LLAB' || type === 'RMP') {
