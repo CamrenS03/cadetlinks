@@ -1,27 +1,27 @@
-import React, { useEffect, useRef, useState } from 'react';
-import {
-  Alert,
-  Avatar,
-  Box,
-  Button,
-  Card,
-  CardContent,
-  CircularProgress,
-  Divider,
-  IconButton,
-  TextField,
-  Tooltip,
-  Typography,
-} from '@mui/material';
-import EditIcon from '@mui/icons-material/Edit';
+import CameraAltIcon from '@mui/icons-material/CameraAlt';
 import CheckIcon from '@mui/icons-material/Check';
 import CloseIcon from '@mui/icons-material/Close';
-import { collection, doc, getDocs, query, updateDoc, where } from 'firebase/firestore';
+import EditIcon from '@mui/icons-material/Edit';
+import PersonOutlined from '@mui/icons-material/PersonOutlined';
+import {
+    Alert,
+    Avatar,
+    Box,
+    Button,
+    Card,
+    CardContent,
+    CircularProgress,
+    Divider,
+    IconButton,
+    TextField,
+    Tooltip,
+    Typography,
+} from '@mui/material';
+import { collection, collectionGroup, doc, getDocs, query, updateDoc, where } from 'firebase/firestore';
+import { getDownloadURL, ref, uploadBytesResumable } from 'firebase/storage';
+import React, { useEffect, useRef, useState } from 'react';
 import { db, storage } from '../../../firebase/firebase';
 import { useUser } from '../../../hooks/useUser';
-import PersonOutlined from '@mui/icons-material/PersonOutlined';
-import CameraAltIcon from '@mui/icons-material/CameraAlt';
-import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 
 type AttendanceStatus = 'Present' | 'Absent' | 'Late' | 'Excused' | 'Voluntarily Present';
 const EVENT_TYPES = ['PT', 'LLAB', 'RMP'] as const;
@@ -136,27 +136,38 @@ export default function Profile() {
 
         const load = async () => {
             try {
-                const summaries: Record<EventType, AttendanceSummary | null> = { PT: null, LLAB: null, RMP: null };
+                const uid = userData.uid;
 
+                const [eventsSnap, attSnap] = await Promise.all([
+                    getDocs(query(collection(db, 'events'), where('mandatory', '==', true))),
+                    getDocs(query(collectionGroup(db, 'attendance'), where('userId', '==', uid))),
+                ]);
+
+                const eventTitles: Record<string, string> = {};
+                eventsSnap.docs.forEach((d) => {
+                    eventTitles[d.id] = (d.data().title as string).trim().toUpperCase();
+                });
+
+                const totalByType: Record<EventType, number> = { PT: 0, LLAB: 0, RMP: 0 };
+                Object.values(eventTitles).forEach((title) => {
+                    if (title == 'PT' || title == 'LLAB' || title == 'RMP') totalByType[title as EventType]++;
+                });
+
+                const loggedByType: Record<EventType, AttendanceStatus[]> = { PT: [], LLAB: [], RMP: [] };
+
+                attSnap.docs.forEach((d) => {
+                    const eventId = d.ref.parent.parent!.id;
+                    const type = eventTitles[eventId] as EventType | undefined;
+                    if (type && type === 'PT' || type === 'LLAB' || type === 'RMP') {
+                        loggedByType[type].push(d.data().status as AttendanceStatus);
+                    }
+                });
+
+                const summaries: Record<EventType, AttendanceSummary | null> = {PT: null, LLAB: null, RMP: null };
                 for (const type of EVENT_TYPES) {
-                    const eventsSnap = await getDocs(
-                        query(collection(db, 'events'), where('mandatory', '==', true))
-                    );
-                    const typeEvents = eventsSnap.docs.filter(
-                        (d) => (d.data().title as string).trim().toUpperCase() === type
-                    );
-
-                    const statuses: (AttendanceStatus | undefined)[] = await Promise.all(
-                        typeEvents.map(async (ev) => {
-                            const attSnap = await getDocs(
-                                collection(db, 'events', ev.id, 'attendance')
-                            );
-                            const myDoc = attSnap.docs.find((d) => d.id === userData.uid);
-                            return myDoc?.data()?.status as AttendanceStatus | undefined;
-                        })
-                    );
-
-                    summaries[type] = calcSummary(statuses);
+                    const logged = loggedByType[type];
+                    const unlogged = Math.max(0, totalByType[type] - logged.length);
+                    summaries[type] = calcSummary([ ...logged, ...Array<undefined>(unlogged).fill(undefined)]);
                 }
 
                 setAttendanceSummaries(summaries);

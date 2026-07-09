@@ -4,13 +4,16 @@ import { StyledEngineProvider } from '@mui/material/styles';
 import App from './App';
 import { BrowserRouter } from 'react-router-dom';
 import { AuthProvider } from './firebase/AuthContext';
+import { AppDataProvider } from './firebase/AppDataContext';
 
 ReactDOM.createRoot(document.querySelector("#root")!).render(
     <React.StrictMode>
         <StyledEngineProvider injectFirst>
             <BrowserRouter>
                 <AuthProvider>
-                    <App />
+                    <AppDataProvider>
+                        <App />
+                    </AppDataProvider>
                 </AuthProvider>
             </BrowserRouter>
         </StyledEngineProvider>

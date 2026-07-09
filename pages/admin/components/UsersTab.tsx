@@ -1,40 +1,40 @@
-import React, { useEffect, useState } from 'react';
-import {
-  Alert,
-  Autocomplete,
-  Box,
-  Button,
-  Checkbox,
-  Chip,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  FormControlLabel,
-  IconButton,
-  List,
-  ListItem,
-  ListItemText,
-  MenuItem,
-  Select,
-  TextField,
-  Tooltip,
-  Typography,
-} from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import PersonAddIcon from '@mui/icons-material/PersonAdd';
 import UpgradeIcon from '@mui/icons-material/Upgrade';
 import {
-  collection,
-  onSnapshot,
-  doc,
-  updateDoc,
-  deleteDoc,
-  addDoc,
-  writeBatch,
-  serverTimestamp,
+    Alert,
+    Autocomplete,
+    Box,
+    Button,
+    Checkbox,
+    Chip,
+    Dialog,
+    DialogActions,
+    DialogContent,
+    DialogTitle,
+    FormControlLabel,
+    IconButton,
+    List,
+    ListItem,
+    ListItemText,
+    MenuItem,
+    Select,
+    TextField,
+    Tooltip,
+    Typography,
+} from '@mui/material';
+import {
+    addDoc,
+    collection,
+    deleteDoc,
+    doc,
+    serverTimestamp,
+    updateDoc,
+    writeBatch,
 } from 'firebase/firestore';
+import { useEffect, useState } from 'react';
+import { useAppData } from '../../../firebase/AppDataContext';
 import { db } from '../../../firebase/firebase';
 
 interface UserRow {
@@ -81,6 +81,7 @@ const nextRank = (rank: string) => {
 };
 
 export default function UsersTab() {
+    const { users: cachedUsers, jobs: cachedJobs, refreshUsers } = useAppData();
     const [users, setUsers] = useState<UserRow[]>([]);
     const [jobs, setJobs] = useState<Job[]>([]);
     const [error, setError] = useState<string | null>(null);
@@ -103,18 +104,28 @@ export default function UsersTab() {
     const [openGradDialog, setOpenGradDialog] = useState(false);
 
     useEffect(() => {
-        const unsub = onSnapshot(collection(db, 'users'), (snap) => {
-            setUsers(snap.docs.map((d) => ({ id: d.id, ...d.data() } as UserRow)));
-        }, (err) => console.error('[UsersTab] users snapshot error:', error));
-        return unsub;
-    }, []);
+        setUsers(cachedUsers.map((u) => ({
+            id: u.uid,
+            displayName: u.displayName,
+            email: u.email,
+            phone: u.phone,
+            flight: u.flight,
+            rank: u.rank,
+            classYear: u.classYear,
+            jobId: u.jobId,
+            supervisorIds: [],
+            superviseeIds: [],
+        })));
+    }, [cachedUsers]);
 
     useEffect(() => {
-        const unsub = onSnapshot(collection(db, 'jobs'), (snap) => {
-            setJobs(snap.docs.map((d) => ({ id: d.id, ...d.data() } as Job)));
-        });
-        return unsub;
-    }, []);
+        setJobs(cachedJobs.map((j) => ({
+            id: j.id,
+            title: j.title,
+            parentJobId: j.parentJobId ?? '',
+            childJobIds: j.childJobIds ?? [],
+        })));
+    }, [cachedJobs]);
 
     const jobTitle = (jobId?: string) => jobs.find((j) => j.id === jobId)?.title ?? '—';
 
@@ -134,6 +145,7 @@ export default function UsersTab() {
                 await updateDoc(doc(db, 'users', editUser.id), { jobId: '', supervisorIds: [], superviseeIds: [] });
             }
             setEditUser(null);
+            refreshUsers();
         } catch (err) {
             console.error(err);
             setError('Failed to save changes');
@@ -235,6 +247,7 @@ export default function UsersTab() {
             });
             setAddForm({ displayName: '', email: '', classYear: '100', flight: 'Alpha' });
             setOpenAdd(false);
+            refreshUsers();
         } catch (err) {
             console.error(err);
             setError('Failed to add user');
@@ -246,6 +259,7 @@ export default function UsersTab() {
         try {
             await deleteDoc(doc(db, 'users', deleteTarget.id));
             setDeleteTarget(null);
+            refreshUsers();
         } catch (err) {
             console.error(err);
             setError('Failed to delte user');
@@ -272,6 +286,7 @@ export default function UsersTab() {
 
         try {
             await batch.commit();
+            refreshUsers();
             if (graduating.length > 0) {
                 setGraduatingCadets(graduating);
                 setKeepMap(Object.fromEntries(graduating.map((u) => [u.id, true])));
@@ -294,6 +309,7 @@ export default function UsersTab() {
                 }
             }
             await batch.commit();
+            refreshUsers();
             setOpenGradDialog(false);
             setGraduatingCadets([]);
         } catch (err) {

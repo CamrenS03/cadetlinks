@@ -29,6 +29,7 @@ import {
     where,
 } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
+import { useAppData } from '../../../firebase/AppDataContext';
 import { db } from '../../../firebase/firebase';
 import { useUser } from '../../../hooks/useUser';
 
@@ -49,7 +50,6 @@ type AttendanceStatus = 'Present' | 'Absent' | 'Late' | 'Excused' | 'Voluntarily
 const BASE_STATUSES: AttendanceStatus[] = ['Present', 'Absent', 'Late', 'Excused'];
 const RMP_STATUSES: AttendanceStatus[] = [...BASE_STATUSES, 'Voluntarily Present'];
 const FLIGHTS = ['Alpha', 'Bravo', 'POC'];
-const CLASS_YEAR_ORDER = ['100', '150', '200', '250', '300', '400'];
 
 function statusesFor(eventTitle: string): AttendanceStatus[] {
     return eventTitle.trim().toUpperCase() === 'RMP' ? RMP_STATUSES : BASE_STATUSES;
@@ -57,6 +57,7 @@ function statusesFor(eventTitle: string): AttendanceStatus[] {
 
 export default function Logger() {
     const currentUser = useUser().userData;
+    const {users: cachedUsers, usersLoading: cachedUsersLoading } = useAppData();
 
     const [todaysEvents, setTodaysEvents] = useState<EventOption[]>([]);
     const [eventsLoading, setEventsLoading] = useState(true);
@@ -64,7 +65,6 @@ export default function Logger() {
     const [selectedEvent, setSelectedEvent] = useState<EventOption | null>(null);
 
     const [users, setUsers] = useState<UserRow[]>([]);
-    const [usersLoading, setUsersLoading] = useState(false);
     const [flightFilter, setFlightFilter] = useState<string>('All');
 
     // attendance[uid] = status or undefined (not yet logged)
@@ -97,30 +97,22 @@ export default function Logger() {
             .finally(() => setEventsLoading(false));
     }, []);
 
-    // Load users when event is selected
+    // Sync users from cache
+    useEffect(() => {
+        setUsers(cachedUsers.map((u) => ({
+            uid: u.uid,
+            displayName: u.displayName,
+            classYear: u.classYear,
+            flight: u.flight,
+        })));
+    }, [cachedUsers]);
+
+    // Load attendance when event is selected
     useEffect(() => {
         if(!selectedEventId) return;
         const event = todaysEvents.find((e) => e.id === selectedEventId) ?? null;
         setSelectedEvent(event);
         setAttendance({});
-        setUsersLoading(true);
-
-        const unsubUsers = onSnapshot(collection(db, 'users'), (snap) => {
-            const loaded: UserRow[] = snap.docs.map((d) => ({
-                uid: d.id,
-                displayName: d.data().displayName ?? d.data().email ?? d.id,
-                classYear: d.data().classYear,
-                flight: d.data().flight
-            }));
-            loaded.sort((a, b) => {
-                const cy = CLASS_YEAR_ORDER.indexOf(b.classYear ?? '') - CLASS_YEAR_ORDER.indexOf(a.classYear ?? '');
-                if (cy !== 0) return cy;
-                return a.displayName.localeCompare(b.displayName);
-            });
-            setUsers(loaded);
-            setUsersLoading(false);
-        });
-
         // Load existing attendance for this event
         const unsubAtt = onSnapshot(
             collection(db, 'events', selectedEventId, 'attendance'),
@@ -133,7 +125,7 @@ export default function Logger() {
             }
         );
 
-        return () => { unsubUsers(); unsubAtt(); };
+        return () => { unsubAtt(); };
     }, [selectedEventId]);
 
     const handleStatusChange = (uid: string, status: AttendanceStatus) => {
@@ -210,7 +202,7 @@ export default function Logger() {
                         </ButtonGroup>
                     </Box>
 
-                    {usersLoading ? (
+                    {cachedUsersLoading ? (
                         <CircularProgress size={24} />
                     ) : (
                         <TableContainer>

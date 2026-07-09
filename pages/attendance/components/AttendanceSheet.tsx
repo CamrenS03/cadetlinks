@@ -1,32 +1,34 @@
-import React, { useEffect, useState } from 'react';
 import {
-  Alert,
-  Box,
-  Button,
-  CircularProgress,
-  Tab,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Tabs,
-  TextField,
-  Tooltip,
-  Typography,
-  useMediaQuery,
-  useTheme,
+    Alert,
+    Box,
+    Button,
+    CircularProgress,
+    Tab,
+    Table,
+    TableBody,
+    TableCell,
+    TableContainer,
+    TableHead,
+    TableRow,
+    Tabs,
+    TextField,
+    Tooltip,
+    Typography,
+    useMediaQuery,
+    useTheme,
 } from '@mui/material';
 import {
-  collection,
-  doc,
-  getDocs,
-  query,
-  setDoc,
-  Timestamp,
-  where,
+    collection,
+    collectionGroup,
+    doc,
+    getDocs,
+    query,
+    setDoc,
+    Timestamp,
+    where,
 } from 'firebase/firestore';
+import { useEffect, useState } from 'react';
+import { useAppData } from '../../../firebase/AppDataContext';
 import { db } from '../../../firebase/firebase';
 import { useUser } from '../../../hooks/useUser';
 
@@ -104,6 +106,7 @@ export default function AttendanceSheet() {
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('md'));
     const currentUser = useUser().userData;
+    const { users: cachedUsers } = useAppData();
 
     const [activeType, setActiveType] = useState<EventType>('PT');
 
@@ -138,31 +141,19 @@ export default function AttendanceSheet() {
 
             setEvents(typeEvents);
 
-            // Load users
-            const usersSnap = await getDocs(collection(db, 'users'));
-            const loadedUsers: UserRow[] = usersSnap.docs.map((d) => ({
-                uid: d.id,
-                displayName: d.data(). displayName ?? d.data().email ?? d.id,
-                classYear: d.data().classYear,
-            }));
-            loadedUsers.sort((a, b) => {
-                const cy = CLASS_YEAR_ORDER.indexOf(b.classYear ?? '') - CLASS_YEAR_ORDER.indexOf(a.classYear ?? '');
-                return cy !== 0 ? cy : a.displayName.localeCompare(b.displayName); 
-            });
-            setUsers(loadedUsers);
+            setUsers(cachedUsers.map((u) => ({ uid: u.uid, displayName: u.displayName, classYear: u.classYear })));
 
             // Load attendance for each event
+            const typeEventIds = new Set(typeEvents.map((e) => e.id));
+            const attSnap = await getDocs(collectionGroup(db, 'events'));
             const attMap: Record<string, AttendanceRecord> = {};
-            await Promise.all(
-                typeEvents.map(async (ev) => {
-                    const attSnap = await getDocs(collection(db, 'events', ev.id, 'attendance'));
-                    attSnap.docs.forEach((d) => {
-                        const uid = d.id;
-                        if (!attMap[uid]) attMap[uid] = {};
-                        attMap[uid][ev.id] = d.data().status as AttendanceStatus | undefined;
-                    });
-                })
-            );
+            attSnap.docs.forEach((d) => {
+                const eventId = d.ref.parent.parent!.id;
+                if (!typeEventIds.has(eventId)) return;
+                const uid = d.id;
+                if (!attMap[uid]) attMap[uid] = {};
+                attMap[uid][eventId] = d.data().status as AttendanceStatus | undefined;
+            });
             setAttendance(attMap);
         } catch (err) {
             console.error(err);

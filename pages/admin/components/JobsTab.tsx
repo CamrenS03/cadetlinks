@@ -1,38 +1,38 @@
-import React, { useEffect, useState } from 'react';
-import {
-  Alert,
-  Box,
-  Button,
-  Checkbox,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  IconButton,
-  MenuItem,
-  Select,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  TextField,
-  Tooltip,
-  Typography,
-} from '@mui/material';
-import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
+import DeleteIcon from '@mui/icons-material/Delete';
 import {
-  collection,
-  onSnapshot,
-  doc,
-  updateDoc,
-  deleteDoc,
-  addDoc,
-  writeBatch,
-  serverTimestamp,
+    Alert,
+    Box,
+    Button,
+    Checkbox,
+    Dialog,
+    DialogActions,
+    DialogContent,
+    DialogTitle,
+    IconButton,
+    MenuItem,
+    Select,
+    Table,
+    TableBody,
+    TableCell,
+    TableContainer,
+    TableHead,
+    TableRow,
+    TextField,
+    Tooltip,
+    Typography,
+} from '@mui/material';
+import {
+    addDoc,
+    collection,
+    deleteDoc,
+    doc,
+    serverTimestamp,
+    updateDoc,
+    writeBatch,
 } from 'firebase/firestore';
+import { useEffect, useState } from 'react';
+import { useAppData } from '../../../firebase/AppDataContext';
 import { db } from '../../../firebase/firebase';
 
 interface Job {
@@ -62,6 +62,7 @@ const PERMISSION_LABELS: Record<string, string> = {
 };
 
 export default function JobsTab() {
+    const { jobs: cachedJobs, refreshJobs } = useAppData();
     const [jobs, setJobs] = useState<Job[]>([]);
     const [error, setError] = useState<string | null>(null);
     const [editTitles, setEditTitles] = useState<Record<string, string>>({});
@@ -69,13 +70,10 @@ export default function JobsTab() {
     const [newJobTitle, setNewJobTitle] = useState('');
 
     useEffect(() => {
-        const unsub = onSnapshot(collection(db, 'jobs'), (snap) => {
-            const loaded = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Job));
-            setJobs(loaded);
-            setEditTitles(Object.fromEntries(loaded.map((j) => [j.id, j.title])));
-        });
-        return unsub;
-    }, []);
+        const loaded = cachedJobs.map((j) => ({ ...j } as Job));
+        setJobs(loaded);
+        setEditTitles(Object.fromEntries(loaded.map((j) => [j.id, j.title])));
+    }, [cachedJobs]);
 
 
     const handleTitleBlur = async (job: Job) => {
@@ -83,6 +81,7 @@ export default function JobsTab() {
         if(!newTitle || newTitle === job.title) return;
         try {
             await updateDoc(doc(db, 'jos', job.id), { title: newTitle });
+            refreshJobs();
         } catch (err) {
             console.error(err);
             setError('Failed to rename job');
@@ -96,6 +95,7 @@ export default function JobsTab() {
             : [...current, permission];
         try {
             await updateDoc(doc(db, 'jobs', job.id), { permissions: updated });
+            refreshJobs();
         } catch (err) {
             console.error(err);
             setError('Failed to update permissions');
@@ -133,6 +133,7 @@ export default function JobsTab() {
 
         try {
             await batch.commit();
+            refreshJobs();
         } catch (err) {
             console.error(err);
             setError('Failed to update parent job');
@@ -150,6 +151,7 @@ export default function JobsTab() {
                 createdAt: serverTimestamp()
             });
             setNewJobTitle('');
+            refreshJobs();
         } catch (err) {
             console.error(err);
             setError('Failed to add job');
