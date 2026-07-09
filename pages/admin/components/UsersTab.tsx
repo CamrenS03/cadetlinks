@@ -41,6 +41,7 @@ interface UserRow {
     id: string;
     displayName: string;
     email: string;
+    phone: string;
     flight?: string;
     rank?: string;
     classYear?: string;
@@ -367,6 +368,12 @@ export default function UsersTab() {
                         fullWidth
                         value={editForm.email ?? ''}
                         onChange={(e) => setEditForm((f) => ({ ...f, email: e.target.value }))}
+                    />
+                    <TextField
+                        label='Phone'
+                        fullWidth
+                        value={editForm.phone ?? ''}
+                        onChange={(e) => setEditForm((f) => ({ ...f, phone: e.target.value }))}
                     />
                     <Select
                         value={editForm.flight ?? ''}

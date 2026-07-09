@@ -1,7 +1,307 @@
-import { Typography } from "@mui/material";
+import React, { useEffect, useState } from 'react';
+import {
+  Alert,
+  Avatar,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  CircularProgress,
+  Divider,
+  IconButton,
+  TextField,
+  Tooltip,
+  Typography,
+} from '@mui/material';
+import EditIcon from '@mui/icons-material/Edit';
+import CheckIcon from '@mui/icons-material/Check';
+import CloseIcon from '@mui/icons-material/Close';
+import { collection, doc, getDocs, query, updateDoc, where } from 'firebase/firestore';
+import { db } from '../../../firebase/firebase';
+import { useUser } from '../../../hooks/useUser';
+import { Person2Outlined } from '@mui/icons-material';
+
+type AttendanceStatus = 'Present' | 'Absent' | 'Late' | 'Excused' | 'Voluntarily Present';
+const EVENT_TYPES = ['PT', 'LLAB', 'RMP'] as const;
+type EventType = typeof EVENT_TYPES[number];
+
+const TYPE_COLOR: Record<EventType, string> = {
+  PT: 'primary.main',
+  LLAB: 'secondary.main',
+  RMP: 'warning.main',
+};
+
+interface AttendanceSummary {
+  total: number;
+  present: number;
+  absent: number;
+  late: number;
+  excused: number;
+  voluntarilyPresent: number;
+  absencesAllowed: number;
+  absencesUsed: number;
+}
+
+function calcSummary(statuses: (AttendanceStatus | undefined)[]): AttendanceSummary {
+    const logged = statuses.filter((s) => s !== undefined) as AttendanceStatus[];
+    const total = statuses.length;
+    const present = logged.filter((s) => s === 'Present').length;
+    const absent = logged.filter((s) => s === 'Absent').length;
+    const late = logged.filter((s) => s === 'Late').length;
+    const excused = logged.filter((s) => s === 'Excused').length;
+    const voluntarilyPresent = logged.filter((s) => s === 'Voluntarily Present').length;
+    const absencesAllowed = Math.floor(total * 0.2 * 2) / 2;
+    const absencesUsed = absent + late * 0.5;
+    return { total, present, absent, late, excused, voluntarilyPresent, absencesAllowed, absencesUsed};
+}
+
+function absencesRemaining(summary: AttendanceSummary): string {
+    if (summary.total === 0) return '-';
+    const rem = summary.absencesAllowed - summary.absencesUsed;
+    return rem % 1 === 0 ? String(rem) : rem.toFixed(1);
+}
 
 export default function Profile() {
+    const { userData, userJob, loading } = useUser();
+    const [bio, setBio] = useState('');
+    const [editingBio, setEditingBio] = useState(false);
+    const [bioValue, setBioValue] = useState('');
+    const [bioSaving, setBioSaving] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    const [attendanceSummaries, setAttendanceSummaries] = useState<Record<EventType, AttendanceSummary | null>>({
+        PT: null, LLAB: null, RMP: null
+    });
+    const [attLoading, setAttLoading] = useState(false);
+
+    // Sync bio from Firestore userData
+    useEffect(() => {
+        const firestoreBio = (userData as any)?.bio ?? '';
+        setBio(firestoreBio);
+        setBioValue(firestoreBio);
+    }, [userData]);
+
+    //Load attendance summaries
+    useEffect(() => {
+        if (!userData?.uid) return;
+        setAttLoading(true);
+
+        const load = async () => {
+            try {
+                const summaries: Record<EventType, AttendanceSummary | null> = { PT: null, LLAB: null, RMP: null };
+
+                for (const type of EVENT_TYPES) {
+                    const eventsSnap = await getDocs(
+                        query(collection(db, 'events'), where('mandatory', '==', true))
+                    );
+                    const typeEvents = eventsSnap.docs.filter(
+                        (d) => (d.data().title as string).trim().toUpperCase() === type
+                    );
+
+                    const statuses: (AttendanceStatus | undefined)[] = await Promise.all(
+                        typeEvents.map(async (ev) => {
+                            const attSnap = await getDocs(
+                                collection(db, 'events', ev.id, 'attendance')
+                            );
+                            const myDoc = attSnap.docs.find((d) => d.id === userData.uid);
+                            return myDoc?.data()?.status as AttendanceStatus | undefined;
+                        })
+                    );
+
+                    summaries[type] = calcSummary(statuses);
+                }
+
+                setAttendanceSummaries(summaries);
+            } catch (err) {
+                console.error(err);
+                setError('Failed to load attendance');
+            } finally {
+                setAttLoading(false);
+            }
+        };
+
+        load();
+    }, [userData?.uid]);
+
+    const handleSaveBio = async () => {
+        if (!userData?.uid) return;
+        setBioSaving(true);
+        try {
+            await updateDoc(doc(db, 'users', userData.uid), { bio: bioValue });
+            setBio(bioValue);
+            setEditingBio(false);
+        } catch (err) {
+            console.error(err);
+            setError('Failed to save bio');
+        } finally {
+            setBioSaving(false);
+        }
+    };
+
+    const handleCancleBio = () => {
+        setBioValue(bio);
+        setEditingBio(false);
+    };
+
+    if (loading) {
+        return (
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', minHeight: 300 }}>
+                <CircularProgress />
+            </Box>
+        );
+    }
+
+    const rem = (type: EventType) => {
+        const s = attendanceSummaries[type];
+        return s ? absencesRemaining(s) : '-';
+    };
+
+    const remColor = (type: EventType) => {
+        const s = attendanceSummaries[type];
+        if (!s || s.total === 0) return 'textSecondary';
+        const r = s.absencesAllowed - s.absencesUsed;
+        if (r <= 0) return 'error.main';
+        if (r <= 1) return 'warning.main';
+        return 'success.main';
+    };
+
     return (
-        <Typography> Profile </Typography>
-    )
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, p: 2, maxWidth: 680, mx: 'auto' }}>
+            {error && <Alert severity='error' onClose={() => setError(null)}>{error}</Alert>}
+
+            {/* Info Card */}
+            <Card>
+                <CardContent>
+                    <Box sx={{ display: 'flex', gap: 3, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                        <Avatar
+                            src={userData?.photoURL ?? undefined }
+                            sx={{ width: 96, height: 96, fontSize: 32, bgcolor: 'primary.main', flexShrink: 0 }}
+                            >
+                            <Person2Outlined />
+                        </Avatar>
+
+                        <Box sx={{ flex: 1, minWidth: 0 }}>
+                            <Typography variant='h5' sx={{ fontWeight: 700 }}>
+                                {userData?.displayName ?? '-'}
+                            </Typography>
+
+                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mt: 1 }}>
+                                <InfoItem label='Rank' value={userData?.rank} />
+                                <InfoItem label='Class Year' value={userData?.classYear} />
+                                <InfoItem label='Flight' value={userData?.flight} />
+                                <InfoItem label='Job' value={userJob?.title} />
+                                <InfoItem label='Email' value={userData?.email} />
+                                <InfoItem label='Phone' value={userData?.phone} />
+                            </Box>
+                        </Box>
+                    </Box>
+                </CardContent>
+            </Card>
+
+            {/* Bio Card */}
+            <Card>
+                <CardContent>
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                        <Typography variant='h6'>Bio</Typography>
+                        {!editingBio && (
+                            <Tooltip title="Edit bio">
+                                <IconButton size='small' onClick={() => setEditingBio(true)}>
+                                    <EditIcon fontSize='small' />
+                                </IconButton>
+                            </Tooltip>
+                        )}
+                    </Box>
+
+                    {editingBio ? (
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                            <TextField
+                                multiline
+                                minRows={3}
+                                fullWidth
+                                value={bioValue}
+                                onChange={(e) => setBioValue(e.target.value)}
+                                placeholder='Write a short bio...'
+                                autoFocus
+                            />
+                            <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
+                                <Button size='small' startIcon={<CloseIcon />} onClick={handleCancleBio}>Cancel</Button>
+                                <Button
+                                    size='small'
+                                    variant='contained'
+                                    startIcon={<CheckIcon />}
+                                    onClick={handleSaveBio}
+                                    disabled={bioSaving}
+                                >{bioSaving ? 'Saving...' : 'Save'}</Button>
+                            </Box>
+                        </Box>
+                    ) : (
+                        <Typography variant='body2' color={bio ? 'textPrimary' : 'textDisabled'} sx={{ whiteSpace: 'pre-wrap' }}>
+                            {bio || 'No bio yet. Click the edit button to add one.'}
+                        </Typography>
+                    )}
+                </CardContent>
+            </Card>
+
+            {/* Attendance Cards */}
+            <Typography variant='h6' sx={{ mt: 1 }}>Attendance</Typography>
+
+            {attLoading ? (
+                <CircularProgress size={24} />
+            ) : (
+                <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+                    {EVENT_TYPES.map((type) => {
+                        const s = attendanceSummaries[type];
+                        return (
+                            <Card key={type} sx={{ flex: '1 1 180px', minWidth: 160 }}>
+                                <CardContent>
+                                    <Typography
+                                        variant='subtitle1'
+                                        sx={{ fontWeight: 700, color: TYPE_COLOR[type], mb: 1 }}
+                                    >{type}</Typography>
+
+                                    <Typography variant='h4' sx={{ fontWeight: 700, color: remColor(type) }}>{rem(type)}</Typography>
+                                    <Typography variant='caption' color='textSecondary'>absences remaining</Typography>
+
+                                    {s && s.total > 0 && (
+                                        <>
+                                            <Divider sx={{ my: 1 }} />
+                                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25}}>
+                                                <StatRow label='Present' value={s.present} />
+                                                <StatRow label='Late' value={s.late} />
+                                                <StatRow label='Absent' value={s.absent} />
+                                                <StatRow label='Excused' value={s.excused} />
+                                                {type === 'RMP' && <StatRow label='Vol. Present' value={s.voluntarilyPresent} />}
+                                            </Box>
+                                        </>
+                                    )}
+
+                                    {(!s || s.total === 0) && (
+                                        <Typography variant='caption' color='textDisabled' sx={{ display: 'block', mt: 0.5 }}>No events logged</Typography>
+                                    )}
+                                </CardContent>
+                            </Card>
+                        );
+                    })}
+                </Box>
+            )}
+        </Box>
+    );
+}
+
+function InfoItem({ label, value }: { label: string; value?: string | null }) {
+    return (
+        <Box>
+            <Typography variant='caption' color='textSecondary' sx={{ display: 'block' }}>{label}</Typography>
+            <Typography variant='body2' sx={{ fontWeight: 500 }}>{value ?? '-'}</Typography>
+        </Box>
+    );
+}
+
+function StatRow({ label, value }: { label: string; value: number; }) {
+    return (
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
+            <Typography variant='caption' color='textSecondary'>{label}</Typography>
+            <Typography variant='caption'>{value}</Typography>
+        </Box>
+    );
 }

@@ -17,6 +17,7 @@ interface Job {
 interface UserData {
   uid: string;
   email: string;
+  phone?: string;
   displayName: string;
   photoURL?: string;
   classYear?: string;
