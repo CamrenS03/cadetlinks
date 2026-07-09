@@ -1,10 +1,10 @@
 import * as React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
+import {
   browserLocalPersistence,
   browserSessionPersistence,
   setPersistence,
-  signInWithEmailAndPassword 
+  signInWithEmailAndPassword,
 } from 'firebase/auth';
 import { auth, db } from '../../firebase/firebase';
 import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
@@ -55,7 +55,7 @@ export default function SignIn(props: { disableCustomTheme?: boolean }) {
   const [passwordError, setPasswordError] = React.useState(false);
   const [passwordErrorMessage, setPasswordErrorMessage] = React.useState('');
   const [open, setOpen] = React.useState(false);
-  const [authError, setAuthError ] = React.useState('');
+  const [authError, setAuthError] = React.useState('');
   const navigate = useNavigate();
   const [rememberMe, setRememberMe] = React.useState(false);
 
@@ -71,13 +71,10 @@ export default function SignIn(props: { disableCustomTheme?: boolean }) {
     event.preventDefault();
     setAuthError('');
 
-    if(!validateInputs()) return;
+    if (!validateInputs()) return;
 
     try {
-      await setPersistence(
-        auth,
-        rememberMe ? browserLocalPersistence : browserSessionPersistence
-      );
+      await setPersistence(auth, rememberMe ? browserLocalPersistence : browserSessionPersistence);
 
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
@@ -87,13 +84,13 @@ export default function SignIn(props: { disableCustomTheme?: boolean }) {
       const baseFields: Record<string, any> = {
         uid: user.uid,
         email: user.email,
-        lastSignIn: serverTimestamp()
+        lastSignIn: serverTimestamp(),
       };
-      if(!existing.exists()) {
+      if (!existing.exists()) {
         baseFields.displayName = user.displayName ?? user.email;
         baseFields.photoURL = user.photoURL;
       }
-      await setDoc(userRef, baseFields, {merge: true});
+      await setDoc(userRef, baseFields, { merge: true });
 
       navigate('/dashboard');
     } catch (error: any) {
@@ -128,13 +125,23 @@ export default function SignIn(props: { disableCustomTheme?: boolean }) {
   return (
     <AppTheme {...props}>
       <CssBaseline enableColorScheme />
-      <AppContainer direction="column" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
+      <AppContainer
+        direction="column"
+        sx={{ justifyContent: 'space-between', alignItems: 'center' }}
+      >
         <ColorModeIconDropdown sx={{ position: 'fixed', top: '1rem', right: '1rem' }} />
         <Card variant="outlined" sx={{ minWidth: '25vw' }}>
           <Box>
             <Box sx={{ display: 'flex' }}>
-              <Typography variant="h4" sx={{ color:"orange", fontSize: 'clamp(2rem, 10vw, 2.15rem)' }}>Cadet</Typography>
-              <Typography variant="h4" sx={{ fontSize: 'clamp(2rem, 10vw, 2.15rem)' }}>Links</Typography>
+              <Typography
+                variant="h4"
+                sx={{ color: 'orange', fontSize: 'clamp(2rem, 10vw, 2.15rem)' }}
+              >
+                Cadet
+              </Typography>
+              <Typography variant="h4" sx={{ fontSize: 'clamp(2rem, 10vw, 2.15rem)' }}>
+                Links
+              </Typography>
             </Box>
             <Typography variant="caption">AFROTC Cadet Portal</Typography>
           </Box>
@@ -188,18 +195,21 @@ export default function SignIn(props: { disableCustomTheme?: boolean }) {
             </FormControl>
             <FormControlLabel
               control={
-              <Checkbox 
-                checked={rememberMe}
-                onChange={(event) => setRememberMe(event.target.checked)}
-                color="primary" 
-              />}
+                <Checkbox
+                  checked={rememberMe}
+                  onChange={(event) => setRememberMe(event.target.checked)}
+                  color="primary"
+                />
+              }
               label="Remember me"
             />
             <Button type="submit" fullWidth variant="contained">
               Sign in
             </Button>
             {authError && (
-              <Typography color='error' sx={{ mt: 1 }}>{authError}</Typography>
+              <Typography color="error" sx={{ mt: 1 }}>
+                {authError}
+              </Typography>
             )}
             <Link
               component="button"

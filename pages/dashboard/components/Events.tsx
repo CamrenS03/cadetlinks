@@ -1,7 +1,17 @@
 import CheckIcon from '@mui/icons-material/Check';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import { Alert, Box, Button, CircularProgress, Collapse, Divider, Paper, Stack, Typography } from '@mui/material';
+import {
+  Alert,
+  Box,
+  Button,
+  CircularProgress,
+  Collapse,
+  Divider,
+  Paper,
+  Stack,
+  Typography,
+} from '@mui/material';
 import { EventCalendar } from '@mui/x-scheduler';
 import {
   collection,
@@ -40,7 +50,11 @@ const MANDATORY_TITLES = new Set(['pt', 'llab', 'dining out', 'dining in']);
 const isMandatory = (title: string) => MANDATORY_TITLES.has(title.trim().toLowerCase());
 
 function formatEventTime(start: Date, end: Date): string {
-  const dateStr = start.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+  const dateStr = start.toLocaleDateString(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  });
   const startStr = start.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
   const endStr = end.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
   return `${dateStr} · ${startStr}–${endStr}`;
@@ -70,8 +84,8 @@ const Events: React.FC = () => {
             startRaw instanceof Timestamp
               ? startRaw.toDate()
               : startRaw
-              ? new Date(startRaw)
-              : new Date();
+                ? new Date(startRaw)
+                : new Date();
           const end =
             data.endDate instanceof Timestamp
               ? data.endDate.toDate()
@@ -107,7 +121,7 @@ const Events: React.FC = () => {
 
   // Subscribe to RSVPs for visible events when panel is open
   useEffect(() => {
-    if(!currentUser || !panelOpen || rsvpableEvents.length === 0) return;
+    if (!currentUser || !panelOpen || rsvpableEvents.length === 0) return;
 
     const unsubs: (() => void)[] = [];
 
@@ -127,7 +141,7 @@ const Events: React.FC = () => {
           .filter((d) => d.data()?.going === true)
           .map((d) => d.data()?.displayName as string)
           .filter(Boolean);
-        setRsvpGoers((prev) => ({ ...prev, [event.id]: names}));
+        setRsvpGoers((prev) => ({ ...prev, [event.id]: names }));
       });
       unsubs.push(unsubAll);
     }
@@ -162,7 +176,8 @@ const Events: React.FC = () => {
       } finally {
         setRsvpLoading((prev) => ({ ...prev, [eventId]: false }));
       }
-    }, [currentUser, rsvpStatus]
+    },
+    [currentUser, rsvpStatus]
   );
 
   // Fired by MUI X Scheduler when events are created, dragged, resized, edited, or deleted
@@ -232,7 +247,15 @@ const Events: React.FC = () => {
 
   if (loading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', minHeight: '400px' }}>
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          height: '100%',
+          minHeight: '400px',
+        }}
+      >
         <CircularProgress />
       </Box>
     );
@@ -246,9 +269,15 @@ const Events: React.FC = () => {
         </Alert>
       )}
 
-      <Paper sx={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+      <Paper
+        sx={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}
+      >
         <EventCalendar
-          events={events.map((e) => ({ ...e, start: e.start.toISOString(), end: e.end.toISOString() }))}
+          events={events.map((e) => ({
+            ...e,
+            start: e.start.toISOString(),
+            end: e.end.toISOString(),
+          }))}
           onEventsChange={handleEventsChange}
           areEventsDraggable
           areEventsResizable
@@ -257,7 +286,7 @@ const Events: React.FC = () => {
         />
       </Paper>
       {/* Collapsible RSVP Panel */}
-      <Paper variant='outlined'>
+      <Paper variant="outlined">
         <Box
           onClick={() => setPanelOpen((o) => !o)}
           sx={{
@@ -270,10 +299,10 @@ const Events: React.FC = () => {
             userSelect: 'none',
           }}
         >
-          <Typography variant='subtitle1' sx={{ fontWeight: 600 }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
             RSVP - Upcoming Non-PMT Events
             {rsvpableEvents.length > 0 && (
-              <Typography component='span' variant='caption' color='textSecondary' sx={{ ml: 1 }}>
+              <Typography component="span" variant="caption" color="textSecondary" sx={{ ml: 1 }}>
                 ({rsvpableEvents.length})
               </Typography>
             )}
@@ -282,51 +311,67 @@ const Events: React.FC = () => {
         </Box>
 
         <Collapse in={panelOpen}>
-            <Divider />
-            {rsvpableEvents.length === 0 ? (
-              <Typography variant='body2' color='textSecondary' sx={{ px: 2, py: 1.5 }}>No upcoming Non-PMT events.</Typography>
-            ) : (
-              <Stack divider={<Divider />} sx={{ maxHeight: 320, overflowY: 'auto' }}>
-                {rsvpableEvents.map((event) => {
-                  const myStatus = rsvpStatus[event.id];
-                  const goers = rsvpGoers[event.id] ?? [];
-                  const busy = rsvpLoading[event.id] ?? false;
+          <Divider />
+          {rsvpableEvents.length === 0 ? (
+            <Typography variant="body2" color="textSecondary" sx={{ px: 2, py: 1.5 }}>
+              No upcoming Non-PMT events.
+            </Typography>
+          ) : (
+            <Stack divider={<Divider />} sx={{ maxHeight: 320, overflowY: 'auto' }}>
+              {rsvpableEvents.map((event) => {
+                const myStatus = rsvpStatus[event.id];
+                const goers = rsvpGoers[event.id] ?? [];
+                const busy = rsvpLoading[event.id] ?? false;
 
-                  return (
-                    <Box
-                      key={event.id}
-                      sx={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        px: 2,
-                        py: 1.25,
-                        gap: 2,
-                        flexWrap: 'wrap'
-                      }}
-                    >
-                      <Box sx={{ minWidth: 0 }}>
-                        <Typography variant='body2' sx={{ fontWeight: 500 }}>{event.title}</Typography>
-                        <Typography variant='caption' color='textSecondary'>{formatEventTime(event.start, event.end)}</Typography>
+                return (
+                  <Box
+                    key={event.id}
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      px: 2,
+                      py: 1.25,
+                      gap: 2,
+                      flexWrap: 'wrap',
+                    }}
+                  >
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                        {event.title}
+                      </Typography>
+                      <Typography variant="caption" color="textSecondary">
+                        {formatEventTime(event.start, event.end)}
+                      </Typography>
+                    </Box>
+
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexShrink: 0 }}>
+                      <Box sx={{ textAlign: 'right' }}>
+                        <Typography variant="caption" color="textSecondary">
+                          {goers.length} going
+                        </Typography>
+                        {goers.length > 0 && (
+                          <Typography
+                            variant="caption"
+                            color="textSecondary"
+                            sx={{ maxWidth: 200, display: 'block' }}
+                          >
+                            {goers.join(', ')}
+                          </Typography>
+                        )}
                       </Box>
-                      
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexShrink: 0 }}>
-                        <Box sx={{ textAlign: 'right' }}>
-                          <Typography variant='caption' color='textSecondary'>{goers.length} going</Typography>
-                          {goers.length > 0 && (
-                            <Typography variant='caption' color='textSecondary' sx={{ maxWidth: 200, display: 'block' }}>{goers.join(', ')}</Typography>
-                          )}
-                        </Box>
-                        <Button 
-                          size='small'
-                          variant={myStatus === true ? 'contained' : 'outlined'}
-                          color='success'
-                          startIcon={<CheckIcon />}
-                          onClick={() => handleRsvp(event.id, true)}
-                          disabled={busy}
-                          sx={{ minWidth: 88 }}
-                        >Going</Button>
-                        {/*<Button 
+                      <Button
+                        size="small"
+                        variant={myStatus === true ? 'contained' : 'outlined'}
+                        color="success"
+                        startIcon={<CheckIcon />}
+                        onClick={() => handleRsvp(event.id, true)}
+                        disabled={busy}
+                        sx={{ minWidth: 88 }}
+                      >
+                        Going
+                      </Button>
+                      {/*<Button 
                           size='small'
                           variant={myStatus === false ? 'contained' : 'outlined'}
                           color='error'
@@ -335,12 +380,12 @@ const Events: React.FC = () => {
                           disabled={busy}
                           sx={{ minWidth: 108 }}
                         >Not Going</Button>*/}
-                      </Box>
                     </Box>
-                  );
-                })}
-              </Stack>
-            )}
+                  </Box>
+                );
+              })}
+            </Stack>
+          )}
         </Collapse>
       </Paper>
     </Box>

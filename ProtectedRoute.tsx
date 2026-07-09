@@ -36,10 +36,10 @@ export function AdminRoute({ children }: { children: React.ReactNode }) {
   }
 
   if (!hasPermission('admin')) {
-    return <Navigate to='/dashboard' replace />;
+    return <Navigate to="/dashboard" replace />;
   }
 
-  return <>{children}</>
+  return <>{children}</>;
 }
 
 export function AttendanceRoute({ children }: { children: React.ReactNode }) {
@@ -50,8 +50,8 @@ export function AttendanceRoute({ children }: { children: React.ReactNode }) {
   }
 
   if (!hasPermission('manage_attendance') || !hasPermission('admin')) {
-    return <Navigate to='/dashboard' replace />;
+    return <Navigate to="/dashboard" replace />;
   }
 
-  return <>{children}</>
+  return <>{children}</>;
 }

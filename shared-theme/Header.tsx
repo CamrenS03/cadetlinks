@@ -22,12 +22,12 @@ export default function AppHeader() {
     <>
       <Box sx={{ display: 'flex', marginTop: { sm: -2.5 } }}>
         <IconButton
-            aria-label="dashboard"
-            size="small"
-            onClick={() => navigate('/dashboard')}
-            sx={{ position: 'fixed', top:'1rem', left: '1rem' }}
+          aria-label="dashboard"
+          size="small"
+          onClick={() => navigate('/dashboard')}
+          sx={{ position: 'fixed', top: '1rem', left: '1rem' }}
         >
-            <Home />
+          <Home />
         </IconButton>
         <Typography variant="h6" sx={{ color: 'orange', fontSize: 'clamp(1rem, 5vw, 1.5rem)' }}>
           Cadet

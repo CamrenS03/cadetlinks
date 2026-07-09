@@ -123,8 +123,8 @@ export const inputsCustomizations: Components<Theme> = {
               },
               '&:active': {
                 backgroundColor: '#b71c1c',
-              }
-            }
+              },
+            },
           },
           {
             props: {
@@ -300,10 +300,10 @@ export const inputsCustomizations: Components<Theme> = {
               backgroundColor: 'rgba(244, 67, 54, 0.04)',
               '&:hover': {
                 backgroundColor: 'rgba(244, 67, 54, 0.08)',
-                borderColor: '#f44336'
+                borderColor: '#f44336',
               },
               '&:active': {
-                backgroundColor: 'rgba(244, 67, 54, 0.12)'
+                backgroundColor: 'rgba(244, 67, 54, 0.12)',
               },
               ...theme.applyStyles('dark', {
                 color: '#ff6b6b',
@@ -312,9 +312,9 @@ export const inputsCustomizations: Components<Theme> = {
                 '&:hover': {
                   backgroundColor: 'rgba(244, 67, 54, 0.2)',
                   borderColor: '#ff6b6b',
-                }
-              })
-            }
+                },
+              }),
+            },
           },
           {
             props: {
@@ -328,7 +328,7 @@ export const inputsCustomizations: Components<Theme> = {
                 backgroundColor: 'rgba(76, 175, 80, 0.08)',
                 borderColor: '#4caf50',
               },
-            }
+            },
           },
           {
             props: {
@@ -402,9 +402,7 @@ export const inputsCustomizations: Components<Theme> = {
   MuiCheckbox: {
     defaultProps: {
       disableRipple: true,
-      icon: (
-        <CheckBoxOutlineBlankRoundedIcon sx={{ color: 'hsla(210, 0%, 0%, 0.0)' }} />
-      ),
+      icon: <CheckBoxOutlineBlankRoundedIcon sx={{ color: 'hsla(210, 0%, 0%, 0.0)' }} />,
       checkedIcon: <CheckRoundedIcon sx={{ height: 14, width: 14 }} />,
       indeterminateIcon: <RemoveRoundedIcon sx={{ height: 14, width: 14 }} />,
     },

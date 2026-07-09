@@ -1,12 +1,7 @@
 // Shared attendance domain: types, event types, status cycles, colors, and the
 // single source of truth for the absence calculation used across the app.
 
-export type AttendanceStatus =
-    | 'Present'
-    | 'Absent'
-    | 'Late'
-    | 'Excused'
-    | 'Voluntarily Present';
+export type AttendanceStatus = 'Present' | 'Absent' | 'Late' | 'Excused' | 'Voluntarily Present';
 
 export const EVENT_TYPES = ['PT', 'LLAB', 'RMP'] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
@@ -109,8 +104,6 @@ export function formatRemaining(summary: AttendanceSummary): string {
 }
 
 /** Convenience: remaining-absences string straight from a list of statuses. **/
-export function absencesRemainingFromStatuses(
-  statuses: (AttendanceStatus | undefined)[]
-): string {
+export function absencesRemainingFromStatuses(statuses: (AttendanceStatus | undefined)[]): string {
   return formatRemaining(summarize(statuses));
 }

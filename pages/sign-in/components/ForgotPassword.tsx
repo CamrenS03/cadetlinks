@@ -29,12 +29,10 @@ export default function ForgotPassword({ open, handleClose }: ForgotPasswordProp
       }}
     >
       <DialogTitle>Reset password</DialogTitle>
-      <DialogContent
-        sx={{ display: 'flex', flexDirection: 'column', gap: 2, width: '100%' }}
-      >
+      <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, width: '100%' }}>
         <DialogContentText>
-          Enter your account&apos;s email address, and we&apos;ll send you a link to
-          reset your password.
+          Enter your account&apos;s email address, and we&apos;ll send you a link to reset your
+          password.
         </DialogContentText>
         <OutlinedInput
           autoFocus

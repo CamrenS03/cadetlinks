@@ -58,10 +58,10 @@ export const surfacesCustomizations: Components<Theme> = {
       root: ({ theme }) => {
         return {
           ...theme.applyStyles('dark', {
-            backgroundColor: 'gray[800]'
+            backgroundColor: 'gray[800]',
           }),
-        }
-      }
+        };
+      },
     },
   },
   MuiCard: {
