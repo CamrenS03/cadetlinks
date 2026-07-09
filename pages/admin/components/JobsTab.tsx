@@ -79,7 +79,7 @@ export default function JobsTab() {
     const newTitle = editTitles[job.id]?.trim();
     if (!newTitle || newTitle === job.title) return;
     try {
-      await updateDoc(doc(db, 'jos', job.id), { title: newTitle });
+      await updateDoc(doc(db, 'jobs', job.id), { title: newTitle });
       refreshJobs();
     } catch (err) {
       console.error(err);

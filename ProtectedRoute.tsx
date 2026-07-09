@@ -49,7 +49,7 @@ export function AttendanceRoute({ children }: { children: React.ReactNode }) {
     return <div>Loading...</div>;
   }
 
-  if (!hasPermission('manage_attendance') || !hasPermission('admin')) {
+  if (!hasPermission('manage_attendance') && !hasPermission('admin')) {
     return <Navigate to="/dashboard" replace />;
   }
 
