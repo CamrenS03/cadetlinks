@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Avatar,
@@ -17,9 +17,11 @@ import EditIcon from '@mui/icons-material/Edit';
 import CheckIcon from '@mui/icons-material/Check';
 import CloseIcon from '@mui/icons-material/Close';
 import { collection, doc, getDocs, query, updateDoc, where } from 'firebase/firestore';
-import { db } from '../../../firebase/firebase';
+import { db, storage } from '../../../firebase/firebase';
 import { useUser } from '../../../hooks/useUser';
-import { Person2Outlined } from '@mui/icons-material';
+import PersonOutlined from '@mui/icons-material/PersonOutlined';
+import CameraAltIcon from '@mui/icons-material/CameraAlt';
+import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 
 type AttendanceStatus = 'Present' | 'Absent' | 'Late' | 'Excused' | 'Voluntarily Present';
 const EVENT_TYPES = ['PT', 'LLAB', 'RMP'] as const;
@@ -69,17 +71,63 @@ export default function Profile() {
     const [bioSaving, setBioSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
+    const [photoURL, setPhotoURL] = useState<string | null>(null);
+    const [photoUploading, setPhotoUploading] = useState(false);
+    const [uploadProgress, setUploadProgress] = useState(0);
+    const photoInputRef = useRef<HTMLInputElement>(null);
+
     const [attendanceSummaries, setAttendanceSummaries] = useState<Record<EventType, AttendanceSummary | null>>({
         PT: null, LLAB: null, RMP: null
     });
     const [attLoading, setAttLoading] = useState(false);
 
-    // Sync bio from Firestore userData
+    // Sync bio and photo from Firestore userData
     useEffect(() => {
         const firestoreBio = (userData as any)?.bio ?? '';
         setBio(firestoreBio);
         setBioValue(firestoreBio);
+        setPhotoURL((userData as any)?.photoURL ?? null);
     }, [userData]);
+
+    const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file || !userData?.uid) return;
+        
+        const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+        if (!allowed.includes(file.type)) {
+            setError('Please select a JPEG, PNG, or WebP image.');
+            return;
+        }
+
+        setPhotoUploading(true);
+        setUploadProgress(0);
+        const storageRef = ref(storage, `profile-photos/${userData.uid}`);
+        const task = uploadBytesResumable(storageRef, file);
+
+        task.on(
+            'state_changed',
+            (snap) => setUploadProgress(Math.round((snap.bytesTransferred / snap.totalBytes) * 100)),
+            (err) => {
+                console.error(err);
+                setError('Photo upload failed');
+                setPhotoUploading(false);
+            },
+            async () => {
+                try {
+                    const url = await getDownloadURL(task.snapshot.ref);
+                    await updateDoc(doc(db, 'users', userData.uid), { photoURL: url });
+                    setPhotoURL(url);
+                } catch (err) {
+                    console.error(err);
+                    setError('Failed to save photo URL');
+                } finally {
+                    setPhotoUploading(false);
+                    // reset input so the same file can be re-selected
+                    if (photoInputRef.current) photoInputRef.current.value = '';
+                }
+            }
+        );
+    };
 
     //Load attendance summaries
     useEffect(() => {
@@ -173,12 +221,58 @@ export default function Profile() {
             <Card>
                 <CardContent>
                     <Box sx={{ display: 'flex', gap: 3, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-                        <Avatar
-                            src={userData?.photoURL ?? undefined }
-                            sx={{ width: 96, height: 96, fontSize: 32, bgcolor: 'primary.main', flexShrink: 0 }}
+                        {/* Hidden file input */}
+                        <input
+                            ref={photoInputRef}
+                            type='file'
+                            accept='image/jpeg,image/png,image/webp,image/gif'
+                            style={{ display: 'none' }}
+                            onChange={handlePhotoChange}
+                        />
+
+                        {/* Clickable avatar with camera overlay */}
+                        <Tooltip title='Change Photo'>
+                            <Box
+                                onClick={() => !photoUploading && photoInputRef.current?.click()}
+                                sx={{
+                                    position: 'relative',
+                                    width: 96,
+                                    height: 96,
+                                    flexShrink: 0,
+                                    cursor: photoUploading ? 'default' : 'pointer',
+                                    '&:hover .avatar-overlay': { opacity: 1 },
+                                }}
                             >
-                            <Person2Outlined />
-                        </Avatar>
+                                <Avatar
+                                    src={photoURL ?? undefined}
+                                    sx={{ width: 96, height: 96, fontSize: 32, bgcolor: 'primary.main' }}
+                                >
+                                    {<PersonOutlined />}
+                                </Avatar>
+
+                                {/* Hover overlay */}
+                                <Box
+                                    className='avatar-overlay'
+                                    sx={{
+                                        position: 'absolute',
+                                        inset: 0,
+                                        borderRadius: '50%',
+                                        bgcolor: 'rgba(0,0,0,0.45)',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        opacity: photoUploading ? 1 : 0,
+                                        transition: 'opacity 0.2s',
+                                    }}
+                                >
+                                    {photoUploading ? (
+                                        <CircularProgress size={28} sx={{ color: '#fff' }} variant='determinate' value={uploadProgress} />
+                                    ) : (
+                                        <CameraAltIcon sx={{ color: '#fff', fontSize: 28 }} />
+                                    )}
+                                </Box>
+                            </Box>
+                        </Tooltip>
 
                         <Box sx={{ flex: 1, minWidth: 0 }}>
                             <Typography variant='h5' sx={{ fontWeight: 700 }}>
