@@ -17,38 +17,21 @@ import {
     useMediaQuery,
     useTheme,
 } from '@mui/material';
-import {
-    collection,
-    collectionGroup,
-    doc,
-    getDocs,
-    query,
-    setDoc,
-    Timestamp,
-    where,
-} from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import { useAppData } from '../../../firebase/AppDataContext';
-import { db } from '../../../firebase/firebase';
+import { fetchAllAttendance, saveAttendanceStatus } from '../../../firebase/services/attendance';
+import { fetchMandatoryEvents } from '../../../firebase/services/events';
 import { useUser } from '../../../hooks/useUser';
-
-type AttendanceStatus = 'Present' | 'Absent' | 'Late' | 'Excused' | 'Voluntarily Present';
-
-const EVENT_TYPES = ['PT', 'LLAB', 'RMP'] as const;
-type EventType = typeof EVENT_TYPES[number];
-
-const BASE_CYCLE: AttendanceStatus[] = ['Present', 'Absent', 'Late', 'Excused'];
-const RMP_CYCLE: AttendanceStatus[] = ['Present', 'Absent', 'Late', 'Excused', 'Voluntarily Present'];
-
-const STATUS_COLORS: Record<AttendanceStatus, string> = {
-    Present: '#2e7d32',
-    Absent: '#c62828',
-    Late: '#f9a825',
-    Excused: '#81c784',
-    'Voluntarily Present': '#1565c0'
-};
-
-const CLASS_YEAR_ORDER = ['100', '150', '200', '250', '300', '400'];
+import {
+    absencesRemainingFromStatuses,
+    AttendanceStatus,
+    cycleFor,
+    EVENT_TYPES,
+    EventType,
+    eventTypeFromTitle,
+    nextStatus,
+    STATUS_COLORS
+} from '../../../lib/attendance';
 
 const CLASS_COLOR: Record<string, string> = {
     100: '#13e1e8',
@@ -73,29 +56,6 @@ interface UserRow {
 
 interface AttendanceRecord {
     [eventId: string]: AttendanceStatus | undefined;
-}
-
-function cycleFor(eventType: EventType): AttendanceStatus[] {
-    return eventType === 'RMP' ? RMP_CYCLE : BASE_CYCLE;
-}
-
-function nextStatus(current: AttendanceStatus | undefined, cycle: AttendanceStatus[]): AttendanceStatus {
-    if (!current) return cycle[0];
-    const idx = cycle.indexOf(current);
-    return cycle[(idx + 1) % cycle.length];
-}
-
-function calcAbsencesRemaining(records: (AttendanceStatus | undefined)[]): string {
-    const total = records.length;
-    if (total === 0) return '-';
-    const allowed = Math.floor(total * 0.2 * 2) / 2;
-    const used = records.reduce((acc, s) => {
-        if (s === 'Absent') return acc + 1;
-        if (s === 'Late') return acc + 0.5;
-        return acc;
-    }, 0);
-    const remaining = allowed - used;
-    return remaining % 1 === 0 ? String(remaining) : remaining.toFixed(1);
 }
 
 function formatColDate(d: Date): string {
@@ -124,20 +84,14 @@ export default function AttendanceSheet() {
         setLoading(true);
         setError(null);
         try {
-            // Build event query
-            const constraints: any[] = [where('mandatory', '==', true)];
-            if (startDate) constraints.push(where('startDate', '>=', Timestamp.fromDate(new Date(startDate + 'T00:00:00'))));
-            if (endDate) constraints.push(where('startDate', '<=', Timestamp.fromDate(new Date(endDate + 'T23:59:59'))));
+            const range = {
+                start: startDate ? new Date(startDate + 'T00:00:00') : undefined,
+                end: endDate ? new Date(endDate + 'T23:59:59') : undefined,
+            };
 
-            const eventsSnap = await getDocs(query(collection(db, 'events'), ...constraints));
-            const typeEvents: EventDoc[] = eventsSnap.docs
-                .filter((d) => (d.data().title as string).trim().toUpperCase() === type)
-                .map((d) => ({
-                    id: d.id,
-                    title: d.data().title,
-                    startDate: (d.data().startDate as Timestamp).toDate(),
-                }))
-                .sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
+            const typeEvents: EventDoc[] = (await fetchMandatoryEvents(range))
+                .filter((e) => eventTypeFromTitle(e.title) === type)
+                .map((e) => ({ id: e.id, title: e.title, startDate: e.startDate }));
 
             setEvents(typeEvents);
 
@@ -145,14 +99,11 @@ export default function AttendanceSheet() {
 
             // Load attendance for each event
             const typeEventIds = new Set(typeEvents.map((e) => e.id));
-            const attSnap = await getDocs(collectionGroup(db, 'events'));
             const attMap: Record<string, AttendanceRecord> = {};
-            attSnap.docs.forEach((d) => {
-                const eventId = d.ref.parent.parent!.id;
+            (await fetchAllAttendance()).forEach(({ eventId, userId, status }) => {
                 if (!typeEventIds.has(eventId)) return;
-                const uid = d.id;
-                if (!attMap[uid]) attMap[uid] = {};
-                attMap[uid][eventId] = d.data().status as AttendanceStatus | undefined;
+                if (!attMap[userId]) attMap[userId] = {};
+                attMap[userId][eventId] = status;
             });
             setAttendance(attMap);
         } catch (err) {
@@ -180,11 +131,7 @@ export default function AttendanceSheet() {
         }));
 
         try {
-            await setDoc(doc(db, 'events', eventId, 'attendance', uid), {
-                userId: uid,
-                status: next,
-                takenById: currentUser.uid,
-            });
+            await saveAttendanceStatus(eventId, uid, next, currentUser.uid);
         } catch (err) {
             console.error(err);
             setError('Failed to save status change');
@@ -255,7 +202,7 @@ export default function AttendanceSheet() {
                             {users.map((user) => {
                                 const userAtt = attendance[user.uid] ?? {};
                                 const statuses = events.map((ev) => userAtt[ev.id]);
-                                const absLeft = calcAbsencesRemaining(statuses);
+                                const absLeft = absencesRemainingFromStatuses(statuses);
                                 const absLeftNum = parseFloat(absLeft);
 
                                 return (

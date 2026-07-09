@@ -1,5 +1,4 @@
 import CheckIcon from '@mui/icons-material/Check';
-import CloseIcon from '@mui/icons-material/Close';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { Alert, Box, Button, CircularProgress, Collapse, Divider, Paper, Stack, Typography } from '@mui/material';

@@ -18,20 +18,13 @@ import {
     ToggleButtonGroup,
     Typography,
 } from '@mui/material';
-import {
-    collection,
-    doc,
-    getDocs,
-    onSnapshot,
-    query,
-    setDoc,
-    Timestamp,
-    where,
-} from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import { useAppData } from '../../../firebase/AppDataContext';
-import { db } from '../../../firebase/firebase';
+import { saveAttendanceStatus, subscribeEventAttendance } from '../../../firebase/services/attendance';
+import { fetchTodaysMandatoryEvents } from '../../../firebase/services/events';
 import { useUser } from '../../../hooks/useUser';
+import { AttendanceStatus, BASE_CYCLE, statusesForTitle } from '../../../lib/attendance';
+import { FLIGHTS } from '../../../lib/constants';
 
 interface EventOption {
     id: string;
@@ -43,16 +36,6 @@ interface UserRow {
     displayName: string;
     classYear?: string;
     flight?: string;
-}
-
-type AttendanceStatus = 'Present' | 'Absent' | 'Late' | 'Excused' | 'Voluntarily Present';
-
-const BASE_STATUSES: AttendanceStatus[] = ['Present', 'Absent', 'Late', 'Excused'];
-const RMP_STATUSES: AttendanceStatus[] = [...BASE_STATUSES, 'Voluntarily Present'];
-const FLIGHTS = ['Alpha', 'Bravo', 'POC'];
-
-function statusesFor(eventTitle: string): AttendanceStatus[] {
-    return eventTitle.trim().toUpperCase() === 'RMP' ? RMP_STATUSES : BASE_STATUSES;
 }
 
 export default function Logger() {
@@ -75,23 +58,9 @@ export default function Logger() {
 
     // Load today's mandatory events
     useEffect(() => {
-        const now = new Date();
-        const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
-        const dayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
-
-        getDocs(
-            query(
-                collection(db, 'events'),
-                where('mandatory', '==', true),
-                where('startDate', '>=', Timestamp.fromDate(dayStart)),
-                where('startDate', '<=', Timestamp.fromDate(dayEnd))
-            )
-        )
-            .then((snap) => {
-                console.log('[loadEvents] About to set todays events');
-                setTodaysEvents(
-                    snap.docs.map((d) => ({ id: d.id, title: d.data().title as string }))
-                );
+        fetchTodaysMandatoryEvents()
+            .then((events) => {
+                setTodaysEvents(events.map((e) => ({ id: e.id, title: e.title })));
             })
             .catch((err) => { console.error(err); setError('Failed to load today\'s events') })
             .finally(() => setEventsLoading(false));
@@ -114,16 +83,9 @@ export default function Logger() {
         setSelectedEvent(event);
         setAttendance({});
         // Load existing attendance for this event
-        const unsubAtt = onSnapshot(
-            collection(db, 'events', selectedEventId, 'attendance'),
-            (snap) => {
-                const map: Record<string, AttendanceStatus | undefined> = {};
-                snap.docs.forEach((d) => {
-                    map[d.id] = d.data().status as AttendanceStatus | undefined;
-                });
-                setAttendance((prev) => ({ ...prev, ...map }));
-            }
-        );
+        const unsubAtt = subscribeEventAttendance(selectedEventId, (map) => {
+            setAttendance((prev) => ({ ...prev, ...map }));
+        });
 
         return () => { unsubAtt(); };
     }, [selectedEventId]);
@@ -140,11 +102,7 @@ export default function Logger() {
             const entries = Object.entries(attendance).filter(([, s]) => s !== undefined);
             await Promise.all(
                 entries.map(([uid, status]) =>
-                    setDoc(doc(db, 'events', selectedEventId, 'attendance', uid), {
-                        userId: uid,
-                        status,
-                        takenById: currentUser.uid
-                    })
+                    saveAttendanceStatus(selectedEventId, uid, status as AttendanceStatus, currentUser.uid)
                 )
             );
             setSuccess('Attendance saved');
@@ -160,7 +118,7 @@ export default function Logger() {
         ? users
         : users.filter((u) => u.flight === flightFilter);
 
-    const statuses = selectedEvent ? statusesFor(selectedEvent.title) : BASE_STATUSES;
+    const statuses = selectedEvent ? statusesForTitle(selectedEvent.title) : BASE_CYCLE;
 
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>

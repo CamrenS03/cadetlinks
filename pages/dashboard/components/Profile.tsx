@@ -17,52 +17,29 @@ import {
     Tooltip,
     Typography,
 } from '@mui/material';
-import { collection, doc, getDoc, getDocs, query, updateDoc, where } from 'firebase/firestore';
+import { doc, updateDoc } from 'firebase/firestore';
 import { getDownloadURL, ref, uploadBytesResumable } from 'firebase/storage';
 import React, { useEffect, useRef, useState } from 'react';
 import { useAppData } from '../../../firebase/AppDataContext';
 import { db, storage } from '../../../firebase/firebase';
+import { fetchUserAttendanceForEvents } from '../../../firebase/services/attendance';
+import { fetchMandatoryEvents } from '../../../firebase/services/events';
 import { useUser } from '../../../hooks/useUser';
-
-type AttendanceStatus = 'Present' | 'Absent' | 'Late' | 'Excused' | 'Voluntarily Present';
-const EVENT_TYPES = ['PT', 'LLAB', 'RMP'] as const;
-type EventType = typeof EVENT_TYPES[number];
+import {
+    AttendanceStatus,
+    AttendanceSummary,
+    EVENT_TYPES,
+    EventType,
+    eventTypeFromTitle,
+    formatRemaining,
+    summarize
+} from '../../../lib/attendance';
 
 const TYPE_COLOR: Record<EventType, string> = {
   PT: 'primary.main',
   LLAB: 'secondary.main',
   RMP: 'warning.main',
 };
-
-interface AttendanceSummary {
-  total: number;
-  present: number;
-  absent: number;
-  late: number;
-  excused: number;
-  voluntarilyPresent: number;
-  absencesAllowed: number;
-  absencesUsed: number;
-}
-
-function calcSummary(statuses: (AttendanceStatus | undefined)[]): AttendanceSummary {
-    const logged = statuses.filter((s) => s !== undefined) as AttendanceStatus[];
-    const total = statuses.length;
-    const present = logged.filter((s) => s === 'Present').length;
-    const absent = logged.filter((s) => s === 'Absent').length;
-    const late = logged.filter((s) => s === 'Late').length;
-    const excused = logged.filter((s) => s === 'Excused').length;
-    const voluntarilyPresent = logged.filter((s) => s === 'Voluntarily Present').length;
-    const absencesAllowed = Math.floor(total * 0.2 * 2) / 2;
-    const absencesUsed = absent + late * 0.5;
-    return { total, present, absent, late, excused, voluntarilyPresent, absencesAllowed, absencesUsed};
-}
-
-function absencesRemaining(summary: AttendanceSummary): string {
-    if (summary.total === 0) return '-';
-    const rem = summary.absencesAllowed - summary.absencesUsed;
-    return rem % 1 === 0 ? String(rem) : rem.toFixed(1);
-}
 
 export default function Profile() {
     const { userData, userJob, loading } = useUser();
@@ -141,36 +118,30 @@ export default function Profile() {
             try {
                 const uid = userData.uid;
 
-                const eventsSnap = await getDocs(query(collection(db, 'events'), where('mandatory', '==', true)));
+                const events = await fetchMandatoryEvents();
 
-                const eventTitles: Record<string, string> = {};
-                eventsSnap.docs.forEach((d) => {
-                    eventTitles[d.id] = (d.data().title as string).trim().toUpperCase();
-                });
-
+                const eventType: Record<string, EventType | null> = {};
                 const totalByType: Record<EventType, number> = { PT: 0, LLAB: 0, RMP: 0 };
-                Object.values(eventTitles).forEach((title) => {
-                    if (title == 'PT' || title == 'LLAB' || title == 'RMP') totalByType[title as EventType]++;
+                events.forEach((e) => {
+                    const type = eventTypeFromTitle(e.title);
+                    eventType[e.id] = type;
+                    if (type) totalByType[type]++;
                 });
 
-                const attDocs = await Promise.all(eventsSnap.docs.map((e) => getDoc(doc(db, 'events', e.id, 'attendance', uid))));
+                const userAtt = await fetchUserAttendanceForEvents(uid, events.map((e) => e.id));
 
                 const loggedByType: Record<EventType, AttendanceStatus[]> = { PT: [], LLAB: [], RMP: [] };
 
-                attDocs.forEach((d) => {
-                    if(!d.exists()) return;
-                    const eventId = d.ref.parent.parent!.id;
-                    const type = eventTitles[eventId] as EventType | undefined;
-                    if (type && type === 'PT' || type === 'LLAB' || type === 'RMP') {
-                        loggedByType[type].push(d.data().status as AttendanceStatus);
-                    }
+                Object.entries(userAtt).forEach(([eventId, status]) => {
+                    const type = eventType[eventId];
+                    if (type) loggedByType[type].push(status);
                 });
 
                 const summaries: Record<EventType, AttendanceSummary | null> = {PT: null, LLAB: null, RMP: null };
                 for (const type of EVENT_TYPES) {
                     const logged = loggedByType[type];
                     const unlogged = Math.max(0, totalByType[type] - logged.length);
-                    summaries[type] = calcSummary([ ...logged, ...Array<undefined>(unlogged).fill(undefined)]);
+                    summaries[type] = summarize([ ...logged, ...Array<undefined>(unlogged).fill(undefined)]);
                 }
 
                 setAttendanceSummaries(summaries);
@@ -216,7 +187,7 @@ export default function Profile() {
 
     const rem = (type: EventType) => {
         const s = attendanceSummaries[type];
-        return s ? absencesRemaining(s) : '-';
+        return s ? formatRemaining(s) : '-';
     };
 
     const remColor = (type: EventType) => {

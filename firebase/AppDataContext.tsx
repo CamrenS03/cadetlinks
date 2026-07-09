@@ -1,7 +1,8 @@
-import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { collection, getDocs } from 'firebase/firestore';
-import { db } from './firebase';
+import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { compareClassYear } from '../lib/constants';
 import { useAuth } from './AuthContext';
+import { db } from './firebase';
 
 export interface CachedUser {
     uid: string;
@@ -35,8 +36,6 @@ interface AppDataContextType {
 
 const AppDataContext = createContext<AppDataContextType | undefined>(undefined);
 
-const CLASS_YEAR_ORDER = ['100', '150', '200', '250', '300', '400'];
-
 export function AppDataProvider({ children }: { children: React.ReactNode }) {
     const { currentUser } = useAuth();
 
@@ -62,7 +61,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                 bio: d.data().bio,
             }));
             loaded.sort((a, b) => {
-                const cy = CLASS_YEAR_ORDER.indexOf(b.classYear ?? '') - CLASS_YEAR_ORDER.indexOf(a.classYear ?? '');
+                const cy = compareClassYear(b.classYear, a.classYear);
                 return cy !== 0 ? cy : a.displayName.localeCompare(b.displayName);
             });
             setUsers(loaded);

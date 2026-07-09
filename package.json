@@ -5,7 +5,9 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "format": "prettier --write \"**/*.{ts,tx,css,json}\"",
+    "format:check": "prettier --check \"**/*{ts,tx,css,json}\""
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
@@ -22,6 +24,7 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^4.3.4",
+    "prettier": "^3.4.2",
     "typescript": "~6.0.3",
     "vite": "^6.0.0",
     "vite-plugin-pwa": "^0.21.0"

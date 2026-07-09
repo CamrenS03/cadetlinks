@@ -36,6 +36,7 @@ import {
 import { useEffect, useState } from 'react';
 import { useAppData } from '../../../firebase/AppDataContext';
 import { db } from '../../../firebase/firebase';
+import { CLASS_YEAR_ORDER, FLIGHTS } from '../../../lib/constants';
 
 interface UserRow {
     id: string;
@@ -56,9 +57,6 @@ interface Job {
     parentJobId: string;
     childJobIds: string[];
 }
-
-const FLIGHTS = ['Alpha', 'Bravo', 'POC'];
-const CLASS_YEARS = ['100', '150', '200', '250', '300', '400'];
 
 const rankForYear = (year: string) => {
     if (year === '100' || year === '150') return 'C/4C';
@@ -411,7 +409,7 @@ export default function UsersTab() {
                         displayEmpty
                     >
                         <MenuItem value=""><em>No class year</em></MenuItem>
-                        {CLASS_YEARS.map((y) => <MenuItem key={y} value={y}>{y}</MenuItem>)}
+                        {CLASS_YEAR_ORDER.map((y) => <MenuItem key={y} value={y}>{y}</MenuItem>)}
                     </Select>
                     <Autocomplete
                         options={jobs}
@@ -447,7 +445,7 @@ export default function UsersTab() {
                         value={addForm.classYear}
                         onChange={(e) => setAddForm((f) => ({ ...f, classYear: e.target.value }))}
                     >
-                        {CLASS_YEARS.map((y) => <MenuItem key={y} value={y}>{y}</MenuItem>)}
+                        {CLASS_YEAR_ORDER.map((y) => <MenuItem key={y} value={y}>{y}</MenuItem>)}
                     </Select>
                     <TextField
                         label="Rank (auto)"

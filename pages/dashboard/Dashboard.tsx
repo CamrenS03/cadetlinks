@@ -1,16 +1,16 @@
-import * as React from 'react';
-import BottomNavigation from './components/BottomNavigation';
 import {
     Box,
     CssBaseline,
-} from '@mui/material'
+} from '@mui/material';
+import * as React from 'react';
+import { AppContainer } from '../../shared-theme/AppContainer';
 import AppTheme from '../../shared-theme/AppTheme';
 import AppHeader from '../../shared-theme/Header';
-import Home from './components/Home';
+import BottomNavigation from './components/BottomNavigation';
 import Events from './components/Events';
-import Resources from './components/Resources';
+import Home from './components/Home';
 import Profile from './components/Profile';
-import { AppContainer } from '../../shared-theme/AppContainer';
+import Resources from './components/Resources';
 
 export default function Dashboard(props: { disableCustomTheme?: boolean }) {
     const [value, setValue] = React.useState('home');

@@ -18,12 +18,11 @@ import {
 } from '@mui/material';
 import { useState } from 'react';
 import { CachedJob, CachedUser, useAppData } from '../../firebase/AppDataContext';
+import { FLIGHTS } from '../../lib/constants';
 import { AppContainer } from '../../shared-theme/AppContainer';
 import AppTheme from '../../shared-theme/AppTheme';
 import AppHeader from '../../shared-theme/Header';
 import PublicProfile from './PublicProfile';
-
-const FLIGHTS = ['Alpha', 'Bravo', 'POC'];
 
 function userMatchesSearch(user: CachedUser, job: CachedJob | undefined, query: string): boolean {
     const q = query.toLowerCase();

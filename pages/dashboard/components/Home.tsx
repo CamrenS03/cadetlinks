@@ -1,23 +1,22 @@
-import { Box, Card, CardActions, CardContent, Chip, IconButton, Paper, Typography } from "@mui/material";
 import Add from "@mui/icons-material/Add";
-import Delete from "@mui/icons-material/Delete"
-import { useEffect, useState } from "react";
+import Delete from "@mui/icons-material/Delete";
+import { Box, Card, CardActions, CardContent, Chip, IconButton, Paper, Typography } from "@mui/material";
 import {
-  collection,
-  query,
-  orderBy,
-  where,
-  onSnapshot,
-  deleteDoc,
-  doc,
-  getDoc,
-  getDocs,
+    collection,
+    deleteDoc,
+    doc,
+    getDocs,
+    onSnapshot,
+    orderBy,
+    query,
+    where
 } from 'firebase/firestore';
-import { db } from "../../../firebase/firebase";
+import { useEffect, useState } from "react";
+import { useAppData } from "../../../firebase/AppDataContext";
 import { useAuth } from "../../../firebase/AuthContext";
+import { db } from "../../../firebase/firebase";
 import AddAnnouncementModal from "./modals/AddAnnouncementModal";
 import DeleteAnnouncementModal from "./modals/DeleteAnnouncementModal";
-import { useAppData } from "../../../firebase/AppDataContext";
 
 interface Announcement {
     id: string;

@@ -1,15 +1,12 @@
-import { collection, deleteDoc, doc, getDoc, onSnapshot, query, where } from 'firebase/firestore';
-import React, { useState, useEffect } from 'react';
-import { db } from '../../../../firebase/firebase'
 import {
-    Dialog,
-    DialogTitle,
-    DialogContent,
-    DialogActions,
-    Button,
     Box,
+    Button,
+    Dialog,
+    DialogActions,
+    DialogContent,
+    DialogTitle,
     Typography
-} from '@mui/material'
+} from '@mui/material';
 
 
 interface DeleteAnnouncementModalProps {

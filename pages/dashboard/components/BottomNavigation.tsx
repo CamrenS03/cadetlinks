@@ -1,13 +1,12 @@
-import * as React from 'react';
+import Calendar from '@mui/icons-material/CalendarMonth';
+import Home from '@mui/icons-material/Home';
+import Menu from '@mui/icons-material/Menu';
+import Person from '@mui/icons-material/Person';
 import {
-    Box,
     BottomNavigation,
-    BottomNavigationAction,
-} from '@mui/material'
-import Home from '@mui/icons-material/Home'
-import Calendar from '@mui/icons-material/CalendarMonth'
-import Menu from '@mui/icons-material/Menu'
-import Person from '@mui/icons-material/Person'
+    BottomNavigationAction
+} from '@mui/material';
+import * as React from 'react';
 
 export default function bottomNavigation({value, onChange}: { value: string, onChange: (e: React.SyntheticEvent, newValue: string) => void }) {
     return (

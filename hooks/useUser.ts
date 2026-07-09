@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
-import { db } from '../firebase/firebase';
-import { useAuth } from '../firebase/AuthContext'
 import { doc, getDoc, onSnapshot } from 'firebase/firestore';
+import { useEffect, useState } from 'react';
+import { useAuth } from '../firebase/AuthContext';
+import { db } from '../firebase/firebase';
 
 interface Job {
   id: string;
@@ -30,8 +30,11 @@ interface UserData {
 }
 
 /**
- * Hook to get current user's profile and job information
- * Provides access to permissions, job details, and supervisor relationships
+ * Hook to get the current user's profile and job information.
+ * Provides access to permissions, job details, and supervisor relationships.
+ *
+ * For looking up *other* users by id, use the app-wide cache in AppDataContext
+ * (useAppData) rather than adding per-hook caches.
  */
 export const useUser = () => {
   const { currentUser } = useAuth();
@@ -39,9 +42,6 @@ export const useUser = () => {
   const [userJob, setUserJob] = useState<Job | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  // Cache for user lookups to avoid redundant queries
-  const [userCache, setUserCache] = useState<Map<string, UserData>>(new Map());
 
   useEffect(() => {
     if (!currentUser) {
@@ -68,9 +68,6 @@ export const useUser = () => {
 
           const data = userDoc.data() as UserData;
           setUserData(data);
-
-          // Cache this user
-          setUserCache((prev) => new Map(prev).set(currentUser.uid, data));
 
           // Fetch job information if jobId exists
           if (data.jobId) {
@@ -107,61 +104,6 @@ export const useUser = () => {
   }, [currentUser]);
 
   /**
-   * Get a user's display name by ID
-   * Uses cache first to avoid redundant Firestore queries
-   */
-  const getUserNameById = async (userId: string): Promise<string> => {
-    if (!userId) return 'Unknown User';
-
-    // Check cache first
-    if (userCache.has(userId)) {
-      const cachedUser = userCache.get(userId);
-      return cachedUser?.displayName || userId;
-    }
-
-    try {
-      const userDoc = await getDoc(doc(db, 'users', userId));
-      if (userDoc.exists()) {
-        const user = userDoc.data() as UserData;
-        // Cache the result
-        setUserCache((prev) => new Map(prev).set(userId, user));
-        return user.displayName || user.email || userId;
-      }
-      return userId;
-    } catch (err) {
-      console.error(`Error fetching user ${userId}:`, err);
-      return userId;
-    }
-  };
-
-  /**
-   * Get a user's full data by ID
-   * Uses cache first to avoid redundant Firestore queries
-   */
-  const getUserById = async (userId: string): Promise<UserData | null> => {
-    if (!userId) return null;
-
-    // Check cache first
-    if (userCache.has(userId)) {
-      return userCache.get(userId) || null;
-    }
-
-    try {
-      const userDoc = await getDoc(doc(db, 'users', userId));
-      if (userDoc.exists()) {
-        const user = userDoc.data() as UserData;
-        // Cache the result
-        setUserCache((prev) => new Map(prev).set(userId, user));
-        return user;
-      }
-      return null;
-    } catch (err) {
-      console.error(`Error fetching user ${userId}:`, err);
-      return null;
-    }
-  };
-
-  /**
    * Check if current user has a specific permission
    */
   const hasPermission = (permissionName: string): boolean => {
@@ -183,13 +125,6 @@ export const useUser = () => {
     return (userJob?.permissions?.length ?? 0) > 0;
   };
 
-  /**
-   * Clear user cache (useful after user updates)
-   */
-  const clearCache = () => {
-    setUserCache(new Map());
-  };
-
   return {
     // Current user data
     userData,
@@ -201,9 +136,6 @@ export const useUser = () => {
     hasPermission,
     getPermissions,
     isAdmin,
-    getUserNameById,
-    getUserById,
-    clearCache,
 
     // Supervisor relationships
     supervisorIds: userData?.supervisorIds ?? [],

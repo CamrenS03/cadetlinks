@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { Person2Outlined } from '@mui/icons-material';
 import {
     Avatar,
@@ -9,6 +8,7 @@ import {
     Divider,
     Typography,
 } from '@mui/material';
+import { useState } from 'react';
 import { CachedJob, CachedUser } from '../../firebase/AppDataContext';
 
 interface Props {
