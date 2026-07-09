@@ -17,6 +17,7 @@ import { db } from "../../../firebase/firebase";
 import { useAuth } from "../../../firebase/AuthContext";
 import AddAnnouncementModal from "./modals/AddAnnouncementModal";
 import DeleteAnnouncementModal from "./modals/DeleteAnnouncementModal";
+import { useAppData } from "../../../firebase/AppDataContext";
 
 interface Announcement {
     id: string;
@@ -37,40 +38,27 @@ interface Event {
     userRsvp: boolean;
 }
 
+const IMPORTANCE_COLOR: Record<string, 'error' | 'warning' | 'default'> = {
+    high: 'error',
+    medium: 'warning',
+    low: 'default'
+};
+
 export default function Home() {
     const { currentUser } = useAuth();
+    const { users, jobs } = useAppData();
     const [announcements, setAnnouncements] = useState<Announcement[]>([]);
     const [upcomingEvents, setUpcomingEvents] = useState<Event[]>([]);
-    const [isAdmin, setIsAdmin] = useState(false);
     const [openAddModal, setOpenAddModal] = useState(false);
     const [openDeleteModal, setOpenDeleteModal] = useState(false);
     const [selectedAnnouncement, setSelectedAnnouncement] = useState<Announcement | null>(null);
-    const [loading, setLoading] = useState(true);
     const userId = currentUser?.uid ?? '';
 
-    useEffect(() => { 
-        if(currentUser?.uid) {
-            fetchUserRole(currentUser.uid);
-        }
-    }, [currentUser]);
-
-    const fetchUserRole = async (uid: string) => {
-        try {
-            const userDoc = await getDoc(doc(db, 'users', uid));
-            if(userDoc.exists()) {
-                const userData = userDoc.data();
-                if(userData.jobId) {
-                    const jobDoc = await getDoc(doc(db, 'jobs', userData.jobId));
-                    if(jobDoc.exists()) {
-                        const jobData = jobDoc.data();
-                        setIsAdmin(jobData.permissions?.includes('manage_announcements') || false);
-                    }
-                }
-            }
-        } catch (error) {
-            console.error('Error fetching user role:', error)
-        }
-    }
+    const cachedUser = users.find((u) => u.uid === userId);
+    const cachedJob = cachedUser?.jobId ? jobs.find((j) => j.id === cachedUser.jobId) : undefined;
+    const canManageAnnouncements = cachedJob?.permissions?.some((p) =>
+        ['manage_announcements', 'admin'].includes(p)
+    ) ?? false;
 
     useEffect(() => {
         try {
@@ -177,7 +165,7 @@ export default function Home() {
                     mb: 2
                 }}>
                     <Typography variant="h6">Announcements</Typography>
-                    {isAdmin && (
+                    {canManageAnnouncements && (
                         <IconButton 
                             aria-label='add' 
                             onClick={() => setOpenAddModal(true)} 
@@ -208,12 +196,21 @@ export default function Home() {
                                         gap: 1
                                     }}>
                                         <Box sx={{ flex: 1 }}>
-                                            <Typography variant='subtitle1' sx={{ fontSize:{ xs: 14, sm: 18 }, fontWeight: 'bold' }}>{announcement.title}</Typography>
+                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                                                <Typography variant='subtitle1' sx={{ fontSize:{ xs: 14, sm: 18 }, fontWeight: 'bold' }}>{announcement.title}</Typography>
+                                                {announcement.importance !== 'low' && (
+                                                    <Chip
+                                                        label={announcement.importance.charAt(0).toUpperCase() + announcement.importance.slice(1)}
+                                                        color={IMPORTANCE_COLOR[announcement.importance]}
+                                                        size='small'
+                                                    />
+                                                )}
+                                            </Box>
                                             <Typography variant='body2' color='textSecondary' sx={{ mt: 1 }}>{announcement.details}</Typography>
                                         </Box>
                                     </Box>
                                 </CardContent>
-                                {isAdmin && (
+                                {canManageAnnouncements && (
                                     <CardActions>
                                         <IconButton 
                                             aria-label='delete'

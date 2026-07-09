@@ -17,9 +17,10 @@ import {
     Tooltip,
     Typography,
 } from '@mui/material';
-import { collection, collectionGroup, doc, getDoc, getDocs, query, updateDoc, where } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, query, updateDoc, where } from 'firebase/firestore';
 import { getDownloadURL, ref, uploadBytesResumable } from 'firebase/storage';
 import React, { useEffect, useRef, useState } from 'react';
+import { useAppData } from '../../../firebase/AppDataContext';
 import { db, storage } from '../../../firebase/firebase';
 import { useUser } from '../../../hooks/useUser';
 
@@ -65,6 +66,7 @@ function absencesRemaining(summary: AttendanceSummary): string {
 
 export default function Profile() {
     const { userData, userJob, loading } = useUser();
+    const { refreshUsers } = useAppData();
     const [bio, setBio] = useState('');
     const [editingBio, setEditingBio] = useState(false);
     const [bioValue, setBioValue] = useState('');
@@ -116,6 +118,7 @@ export default function Profile() {
                 try {
                     const url = await getDownloadURL(task.snapshot.ref);
                     await updateDoc(doc(db, 'users', userData.uid), { photoURL: url });
+                    refreshUsers();
                     setPhotoURL(url);
                 } catch (err) {
                     console.error(err);
@@ -187,6 +190,7 @@ export default function Profile() {
         setBioSaving(true);
         try {
             await updateDoc(doc(db, 'users', userData.uid), { bio: bioValue });
+            refreshUsers();
             setBio(bioValue);
             setEditingBio(false);
         } catch (err) {
